@@ -1,0 +1,125 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace HERGPremiumValidationSchedular.Models.Domain
+{
+    public class gc_loading_discount
+    {
+        public long batch_id { get; set; }
+        public int? deductables_insured_1 { get; set; }
+        public int? deductables_insured_2 { get; set; }
+        public int? deductables_insured_3 { get; set; }
+        public int? deductables_insured_4 { get; set; }
+        public int? deductables_insured_5 { get; set; }
+        public int? deductables_insured_6 { get; set; }
+        public int? deductables_insured_7 { get; set; }
+        public int? deductables_insured_8 { get; set; }
+        public int? deductables_insured_9 { get; set; }
+        public int? deductables_insured_10 { get; set; }
+        public int? deductables_insured_11 { get; set; }
+        public int? deductables_insured_12 { get; set; }
+        public int? wellness_1 { get; set; }
+        public int? wellness_2 { get; set; }
+        public int? wellness_3 { get; set; }
+        public int? wellness_4 { get; set; }
+        public int? wellness_5 { get; set; }
+        public int? wellness_6 { get; set; }
+        public int? wellness_7 { get; set; }
+        public int? wellness_8 { get; set; }
+        public int? wellness_9 { get; set; }
+        public int? wellness_10 { get; set; }
+        public int? wellness_11 { get; set; }
+        public int? wellness_12 { get; set; }
+        public int? stay_activ_1 { get; set; }
+        public int? stay_activ_2 { get; set; }
+        public int? stay_activ_3 { get; set; }
+        public int? stay_activ_4 { get; set; }
+        public int? stay_activ_5 { get; set; }
+        public int? stay_activ_6 { get; set; }
+        public int? stay_activ_7 { get; set; }
+        public int? stay_activ_8 { get; set; }
+        public int? stay_activ_9 { get; set; }
+        public int? stay_activ_10 { get; set; }
+        public int? stay_activ_11 { get; set; }
+        public int? stay_activ_12 { get; set; }
+        public int? basic_loading_rate_1 { get; set; }
+        public int? basic_loading_rate_2 { get; set; }
+        public int? basic_loading_rate_3 { get; set; }
+        public int? basic_loading_rate_4 { get; set; }
+        public int? basic_loading_rate_5 { get; set; }
+        public int? basic_loading_rate_6 { get; set; }
+        public int? basic_loading_rate_7 { get; set; }
+        public int? basic_loading_rate_8 { get; set; }
+        public int? basic_loading_rate_9 { get; set; }
+        public int? basic_loading_rate_10 { get; set; }
+        public int? basic_loading_rate_11 { get; set; }
+        public int? basic_loading_rate_12 { get; set; }
+        public int? fitness_discount_1 { get; set; }
+        public int? fitness_discount_2 { get; set; }
+        public int? fitness_discount_3 { get; set; }
+        public int? fitness_discount_4 { get; set; }
+        public int? fitness_discount_5 { get; set; }
+        public int? fitness_discount_6 { get; set; }
+        public int? fitness_discount_7 { get; set; }
+        public int? fitness_discount_8 { get; set; }
+        public int? fitness_discount_9 { get; set; }
+        public int? fitness_discount_10 { get; set; }
+        public int? fitness_discount_11 { get; set; }
+        public int? fitness_discount_12 { get; set; }
+        public int? health_incentive_1 { get; set; }
+        public int? health_incentive_2 { get; set; }
+        public int? health_incentive_3 { get; set; }
+        public int? health_incentive_4 { get; set; }
+        public int? health_incentive_5 { get; set; }
+        public int? health_incentive_6 { get; set; }
+        public int? health_incentive_7 { get; set; }
+        public int? health_incentive_8 { get; set; }
+        public int? health_incentive_9 { get; set; }
+        public int? health_incentive_10 { get; set; }
+        public int? health_incentive_11 { get; set; }
+        public int? health_incentive_12 { get; set; }
+        public int? reserv_benefit_1 { get; set; }
+        public int? reserv_benefit_2 { get; set; }
+        public int? reserv_benefit_3 { get; set; }
+        public int? reserv_benefit_4 { get; set; }
+        public int? reserv_benefit_5 { get; set; }
+        public int? reserv_benefit_6 { get; set; }
+        public int? reserv_benefit_7 { get; set; }
+        public int? reserv_benefit_8 { get; set; }
+        public int? reserv_benefit_9 { get; set; }
+        public int? reserv_benefit_10 { get; set; }
+        public int? reserv_benefit_11 { get; set; }
+        public int? reserv_benefit_12 { get; set; }
+        public int? rb_claimed_amt_1 { get; set; }
+        public int? rb_claimed_amt_2 { get; set; }
+        public int? rb_claimed_amt_3 { get; set; }
+        public int? rb_claimed_amt_4 { get; set; }
+        public int? rb_claimed_amt_5 { get; set; }
+        public int? rb_claimed_amt_6 { get; set; }
+        public int? rb_claimed_amt_7 { get; set; }
+        public int? rb_claimed_amt_8 { get; set; }
+        public int? rb_claimed_amt_9 { get; set; }
+        public int? rb_claimed_amt_10 { get; set; }
+        public int? rb_claimed_amt_11 { get; set; }
+        public int? rb_claimed_amt_12 { get; set; }
+        public int? policy_ld_amount_1 { get; set; }
+        public int? policy_ld_amount_2 { get; set; }
+        public int? policy_ld_amount_3 { get; set; }
+        public int? policy_ld_amount_4 { get; set; }
+        public int? policy_ld_amount_5 { get; set; }
+        public int? policy_ld_desc_1 { get; set; }
+        public int? policy_ld_desc_2 { get; set; }
+        public int? policy_ld_desc_3 { get; set; }
+        public int? policy_ld_desc_4 { get; set; }
+        public int? policy_ld_desc_5 { get; set; }
+        public int? policy_ld_rate_1 { get; set; }
+        public int? policy_ld_rate_2 { get; set; }
+        public int? policy_ld_rate_3 { get; set; }
+        public int? policy_ld_rate_4 { get; set; }
+        public int? policy_ld_rate_5 { get; set; }
+        public string preventive_hc { get; set; }
+        [Key]
+        public long policy_no { get; set; }
+
+      
+    }
+}
