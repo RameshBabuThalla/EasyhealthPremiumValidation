@@ -1217,21 +1217,30 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         {
             try
             {
-                if (sumInsuredList[i].HasValue && baseLoadingRates[i].HasValue)
+                // Check if index is within range for both lists
+                if (i >= 0 && i < sumInsuredList.Count && i < baseLoadingRates.Count)
                 {
-                    return sumInsuredList[i].Value * baseLoadingRates[i].Value;
+                    if (sumInsuredList[i].HasValue && baseLoadingRates[i].HasValue)
+                    {
+                        return sumInsuredList[i].Value * baseLoadingRates[i].Value;
+                    }
+                    else
+                    {
+                        return (decimal?)0;  // Return 0 as a decimal? if either value is null
+                    }
                 }
                 else
                 {
-                    return (decimal?)0;  // Return 0 as a decimal?
+                    return (decimal?)0;  // Return 0 if index is out of range
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error calculating loading amount: {ex.Message}");
-                return (decimal?)0;  // Return 0 as a decimal? in case of error
+                return (decimal?)0;  // Return 0 as a decimal? in case of an error
             }
         }
+
 
 
         //static decimal? GetCARRiderLoadingInsured2(decimal? si_2, decimal? loading_per_insured_2)
