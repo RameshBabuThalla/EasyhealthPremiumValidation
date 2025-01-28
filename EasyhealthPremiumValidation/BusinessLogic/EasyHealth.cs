@@ -28,85 +28,75 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
        
         public EasyHealth(HDFCDbContext hDFCDbContext, ILogger<EasyHealth> logger)
         {
-            this.dbContext = hDFCDbContext;
+            //this.dbContext = hDFCDbContext;
             _logger = logger;
            
         }
 
 
-        public async Task GetEasyHealthValidation(IEnumerable<EasyHealthRNE> ehRNEData, string policyNo,HDFCDbContext dbContext, Dictionary<string, Hashtable> baseRateHashTable, Dictionary<string, Hashtable> hdcRatesTable, Dictionary<string, Hashtable> caRatesTable, Dictionary<string, Hashtable> ciRatesTable)
+        public async Task GetEasyHealthValidation(IEnumerable<EasyHealthRNE> ehRNEData, string policyNo, Dictionary<string, Hashtable> baseRateHashTable, Dictionary<string, Hashtable> hdcRatesTable, Dictionary<string, Hashtable> caRatesTable, Dictionary<string, Hashtable> ciRatesTable)
         {
             _logger.LogInformation("EasyHealthPremiumValidation is Started!");
-           await CalculateEasyHealthPremium(ehRNEData,policyNo,dbContext, baseRateHashTable, hdcRatesTable, caRatesTable, ciRatesTable);
+           await CalculateEasyHealthPremium(ehRNEData,policyNo, baseRateHashTable, hdcRatesTable, caRatesTable, ciRatesTable);
 
         }
-        async Task HandleCrosschecksAndUpdateStatus(EasyHealthRNE ehRNEData, decimal? crosscheck1, decimal? crosscheck2)
-        {
-            var record = dbContext.premium_validation.FirstOrDefault(item => item.certificate_no == ehRNEData.policy_number.ToString());
-            if (record != null && record.rn_generation_status == "Reconciliation Successful")
-            {
-                decimal crosscheck1Value = crosscheck1.HasValue ? crosscheck1.Value : 0;
-                decimal crosscheck2Value = crosscheck2.HasValue ? crosscheck2.Value : 0;
-                if (crosscheck1.HasValue)
-                {
-                    if ((Math.Abs(crosscheck1.Value) <= 10) || ((Math.Abs(crosscheck1.Value) <= 10 && Math.Abs(crosscheck2Value) <= 10)))
-                    {
-                        record.rn_generation_status = "RN Generation Awaited";
-                        record.final_remarks = "RN Generation Awaited";
-                        record.dispatch_status = "PDF Gen Under Process With CLICK PSS Team";
-                    }
-                    else if ((Math.Abs(crosscheck1.Value) > 10) ||( Math.Abs(crosscheck1.Value) > 10 && Math.Abs(crosscheck2Value) <= 10))
-                    {
-                        record.rn_generation_status = "IT Issue - QC Failed";
-                        record.final_remarks = "IT Issues";
-                        record.dispatch_status = "Revised Extraction REQ From IT Team QC Failed Cases";
-                        record.error_description = "Premium verification failed due to premium difference of more than 10 rupees";
-                    }
-                    else if (Math.Abs(crosscheck1.Value) <= 10 && Math.Abs(crosscheck2Value) > 10)
-                    {
-                        record.rn_generation_status = "IT Issue - Upsell QC Failed";
-                    }
-                    else if (Math.Abs(crosscheck1.Value) > 10 && Math.Abs(crosscheck2Value) > 10)
-                    {
-                        record.rn_generation_status = "IT Issue - QC Failed";
-                    }
-                }
-                dbContext.premium_validation.Update(record);
-
-
-                int maxRetries = 5;
-                int attempt = 0;
-                int baseDelay = 1000; // Base delay in milliseconds
-                Random rng = new Random();
-                while (attempt < maxRetries)
-                {
-                    try
-                    {
-                        await dbContext.SaveChangesAsync();
-                        break;  // Exit if successful
-                    }
-                    catch (DbUpdateConcurrencyException ex)
-                    {
-                        var entry = ex.Entries.Single();
-                        await entry.ReloadAsync();
-                    }
-                    catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "40P01")
-                    {
-                        attempt++;
-                        if (attempt >= maxRetries)
-                            throw;
-
-                        int delay = baseDelay * (int)Math.Pow(2, attempt) + rng.Next(0, 500);  // Random jitter added
-                        await Task.Delay(delay);
-                    }
-                }
-            }
-        }
-
-        public async Task<IEnumerable<EasyHealthRNE>> GetGCEasyHealthDataAsync(string policyNo, HDFCDbContext dbContext)
+        async Task HandlePremiumCrosschecksAndUpdateStatus(string policyNo, EasyHealthRNE osRNEData, decimal? crosscheck, decimal? netPremium, decimal? finalPremium, decimal? gst)
         {
             string? connectionString = ConfigurationManager.ConnectionStrings["PostgresDb"].ConnectionString;
-            using (var connection = dbContext.Database.GetDbConnection())
+            using (var postgresConnection = new NpgsqlConnection(connectionString))
+            {
+                postgresConnection.Open();              
+                var record = postgresConnection.QueryFirstOrDefault<premium_validation>(
+                    "SELECT certificate_no FROM ins.premium_validation WHERE certificate_no = @CertificateNo",
+                    new { CertificateNo = osRNEData.policy_number.ToString() });
+
+                if (record == null)
+                {
+                    decimal? crosscheck1Value = crosscheck.HasValue ? crosscheck.Value : 0;
+
+                    if (crosscheck1Value.HasValue)
+                    {
+                        if (Math.Abs(crosscheck1Value.Value) <= 10)
+                        {
+                            var insertQuery = @"
+                    INSERT INTO ins.premium_validation (certificate_no, verified_prem, verified_gst, verified_total_prem, rn_generation_status, final_remarks, dispatch_status)
+                    VALUES (@CertificateNo, @VerifiedPrem, @VerifiedGst, @VerifiedTotalPrem, 'RN Generation Awaited', 'RN Generation Awaited', 'PDF Gen Under Process With CLICK PSS Team')";
+
+                            postgresConnection.Execute(insertQuery, new
+                            {
+                                CertificateNo = osRNEData.policy_number.ToString(),
+                                VerifiedPrem = netPremium,
+                                VerifiedGst = gst,
+                                VerifiedTotalPrem = finalPremium
+                            });
+
+                        }
+                        else if (Math.Abs(crosscheck.Value) > 10)
+                        {
+
+                            var insertQuery = @"
+                            INSERT INTO ins.premium_validation (certificate_no, verified_prem, verified_gst, verified_total_prem, rn_generation_status, final_remarks, dispatch_status, error_description)
+                            VALUES (@CertificateNo, @VerifiedPrem, @VerifiedGst, @VerifiedTotalPrem, 'IT Issue - QC Failed', 'IT Issues', 'Revised Extraction REQ From IT Team QC Failed Cases', 'Premium verification failed due to premium difference of more than 10 rupees')";
+
+                            postgresConnection.Execute(insertQuery, new
+                            {
+                                CertificateNo = osRNEData.policy_number.ToString(),
+                                VerifiedPrem = netPremium,
+                                VerifiedGst = gst,
+                                VerifiedTotalPrem = finalPremium,
+                            });
+
+                        }
+
+                    }
+                }
+
+            }
+        }
+        public async Task<IEnumerable<EasyHealthRNE>> GetGCEasyHealthDataAsync(string policyNo)
+        {
+            string? connectionString = ConfigurationManager.ConnectionStrings["PostgresDb"].ConnectionString;
+            using (var connection = new NpgsqlConnection(connectionString))
             {
                 var sqlQuery = @"
                 SELECT
@@ -427,7 +417,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
             INNER JOIN ins.idst_renewal_data_rgs ehidst ON eh.policy_number = ehidst.certificate_no
             WHERE eh.policy_number = @PolicyNo";
 
-                var result = await connection.QueryAsync<EasyHealthRNE>(sqlQuery, new { PolicyNo = policyNo });
+                var result = await connection.QueryAsync<EasyHealthRNE>(sqlQuery, new { PolicyNo = policyNo }).ConfigureAwait(false);
                 return result;
             }
         }
@@ -475,12 +465,10 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 }
             }
             catch (Exception ex)
-            {
-                // Log the error (use your preferred logging mechanism)
+            {                
                 Log.Error(ex, "An error occurred while fetching renewal data for policy: {PolicyNo}", policyNo);
-
-                // Optionally, handle the error here or return a default value like an empty list
-                return Enumerable.Empty<IdstData>();  // Returning an empty list in case of failure
+                
+                return Enumerable.Empty<IdstData>();  
             }
         }
         public static List<object> ExtractData(HERGPremiumValidationSchedular.Models.Domain.EasyHealthRNE easyHealthRNE)
@@ -489,7 +477,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
             var properties = typeof(HERGPremiumValidationSchedular.Models.Domain.EasyHealthRNE).GetProperties(BindingFlags.Public | BindingFlags.Instance);
             foreach (var property in properties)
             {
-                for (int i = 11; i <= 1010; i += 1)  // Adjust the range if necessary
+                for (int i = 11; i <= 1010; i += 1)  
                 {
                     if (property.Name.StartsWith($"covername{i}") ||
                         property.Name.StartsWith($"coversi{i}") ||
@@ -503,7 +491,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
             return data;
         }
 
-        private async Task CalculateEasyHealthPremium(IEnumerable<EasyHealthRNE> ehRNEData,string policyNo,HDFCDbContext dbContext, Dictionary<string, Hashtable> baseRateHashTable, Dictionary<string, Hashtable> hdcRatesTable, Dictionary<string, Hashtable> caRatesTable, Dictionary<string, Hashtable> ciRatesTable)
+        private async Task CalculateEasyHealthPremium(IEnumerable<EasyHealthRNE> ehRNEData,string policyNo, Dictionary<string, Hashtable> baseRateHashTable, Dictionary<string, Hashtable> hdcRatesTable, Dictionary<string, Hashtable> caRatesTable, Dictionary<string, Hashtable> ciRatesTable)
         {
             EasyHealthRNE eh = null;
             var columnNames = new List<string>();
@@ -516,15 +504,13 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 for (int i = 11; i <= 66; i += 10)
                 {
                     for (int j = i; j < i + 6; j++)
-                    {
-                        //Log.Information($"i {j}");
+                    {                       
                         table.Columns.Add($"covername{j}", typeof(string));
                         table.Columns.Add($"coversi{j}", typeof(string));
                         table.Columns.Add($"coverprem{j}", typeof(string));
                         table.Columns.Add($"coverloadingrate{j}", typeof(string));
                     }
-                }
-                // Loop for special range 101 to 109
+                }               
                 for (int i = 101; i <= 109; i++)
                 {
                     table.Columns.Add($"covername{i}", typeof(string));
@@ -642,31 +628,26 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 var noOfMembers = ageValues.Count(age => age > 0);
                 int? eldestMember = ageValues.Max();
                 int? count = noOfMembers;
-                var numberOfMemberss = noOfMembers;
-
-                // Loyalty Discount c44
+                var numberOfMemberss = noOfMembers;                
                 string searchLoyaltyDescText = "Loyalty Discount";
                 bool containsLoyaltyDescText = policyLdDescValues.Any(desc => desc != null && desc.Contains(searchLoyaltyDescText, StringComparison.OrdinalIgnoreCase));
                 decimal? resultLoyaltyDescText = containsLoyaltyDescText ? 1 : 0;
-                decimal? loyaltyDiscountValue = containsLoyaltyDescText ? 2.5m : 0.0m;
-                // Employee Discount
+                decimal? loyaltyDiscountValue = containsLoyaltyDescText ? 2.5m : 0.0m;               
                 string searchEmployeeDescText = "Employee Discount";
                 bool containsEmployeeDescText = policyLdDescValues.Any(desc => desc != null && desc.Contains(searchEmployeeDescText, StringComparison.OrdinalIgnoreCase));
                 decimal? resultSearchEmployeeDescText = containsEmployeeDescText ? 1 : 0;
-                decimal? employeeDiscountValue = containsEmployeeDescText ? 5.0m : 0.0m;
-                // Online Discount
+                decimal? employeeDiscountValue = containsEmployeeDescText ? 5.0m : 0.0m;             
                 string searchOnlineDescText = "Online Discount";
                 bool containsOnlineDescText = policyLdDescValues.Any(desc => desc != null && desc.Contains(searchOnlineDescText, StringComparison.OrdinalIgnoreCase));
                 decimal? resultSearchOnlineDescText = containsOnlineDescText ? 1 : 0;
-                decimal? onlineDiscountValue = containsOnlineDescText ? 5.0m : 0.0m;
-                // Family Discount
+                decimal? onlineDiscountValue = containsOnlineDescText ? 5.0m : 0.0m;          
                 var policyType = row.policy_type;
                 string searcFamilyDescText = "Family Discount";
                 bool containsFamilyDescText = policyLdDescValues.Any(desc => desc != null && desc.Contains(searcFamilyDescText, StringComparison.OrdinalIgnoreCase));
                 decimal? resultSearchFamilyDescText = containsFamilyDescText ? 1 : 0;
                 decimal? familyDiscountValue = GetFamilyDiscount(policyType, numberOfMemberss);
                 decimal? familyDiscountPRHDC = GetFamilyDiscountPRHDC(policyType, numberOfMemberss);
-                // Long Term Discount
+           
                 var policyPeriod = row.policy_period;
                 decimal longTermDiscount = GetLongTermDiscount(policyPeriod);
                 var columnName = GetColumnNameForPolicyPeriod(policyPeriod);
@@ -674,33 +655,9 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 {
                     throw new ArgumentException($"Invalid policy period: {policyPeriod}");
                 }
-
-                decimal? loyaltyDiscount = resultLoyaltyDescText;// row.loyalty_discount;//c798
-                decimal? employeeDiscount = resultSearchEmployeeDescText;//c799
-                decimal? onlineDiscount = resultSearchOnlineDescText;//c800
-
-                //decimal? siOne = row.sum_insured1;//c26
-                //decimal? siTwo = row.sum_insured2;//c27
-                //decimal? siThree = row.sum_insured3;//c28
-                //decimal? siFour = row.sum_insured4;//c29
-                //decimal? siFive = row.sum_insured5;//c30
-                //decimal? siSix = row.sum_insured6;//c31
-                //decimal? totalsuminsured = (siOne ?? 0) + (siTwo ?? 0) + (siThree ?? 0) + (siFour ?? 0) + (siFive ?? 0) + (siSix ?? 0);
-
-                //decimal? cbOne = Convert.ToDecimal(row.insured_cb1);
-                //decimal? cbTwo = Convert.ToDecimal(row.insured_cb2);
-                //decimal? cbThree = Convert.ToDecimal(row.insured_cb3);
-                //decimal? cbFour = Convert.ToDecimal(row.insured_cb4);
-                //decimal? cbFive = Convert.ToDecimal(row.insured_cb5);
-                //decimal? cbSix = Convert.ToDecimal(row.insured_cb6);
-                //decimal? cumulativebonus = (cbOne ?? 0) + (cbTwo ?? 0) + (cbThree ?? 0) + (cbFour ?? 0) + (cbFive ?? 0) + (cbSix ?? 0);
-
-                //decimal? basicLoadingRateOne = iDSTData.loading_per_insured1 ?? 0;//c38
-                //decimal? basicLoadingRateTwo = iDSTData.loading_per_insured2 ?? 0;//c39
-                //decimal? basicLoadingRateThree = iDSTData.loading_per_insured3 ?? 0;//c40
-                //decimal? basicLoadingRateFour = iDSTData.loading_per_insured4 ?? 0;//c41
-                //decimal? basicLoadingRateFive = iDSTData.loading_per_insured5 ?? 0;//c42
-                //decimal? basicLoadingRateSix = iDSTData.loading_per_insured6 ?? 0;//c43
+                decimal? loyaltyDiscount = resultLoyaltyDescText;
+                decimal? employeeDiscount = resultSearchEmployeeDescText;
+                decimal? onlineDiscount = resultSearchOnlineDescText;      
 
                 List<decimal?> sumInsuredList = new List<decimal?>();
 
@@ -756,46 +713,10 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
 
                     basePremiumsList.Add(basePrem);
                 }
-
-                //var sql = $@"
-                //SELECT {columnName}
-                //FROM easyhealth_baserates
-                //WHERE si = @p0 AND age = @p1 AND tier = @p2 AND variant = @p3";
-
-                //// Execute the raw SQL query
-                //var basePremium1 = await dbContext.easyhealth_baserates
-                //.FromSqlRaw(sql, siOne, insuredAgeOne, zone, c12)
-                //    .Select(r => EF.Property<decimal?>(r, columnName))
-                //    .FirstOrDefaultAsync() ?? defaultValue;
-                //var basePremium2 = await dbContext.easyhealth_baserates
-                //    .FromSqlRaw(sql, siTwo, insuredAgeTwo, zone, c12)
-                //    .Select(r => EF.Property<decimal?>(r, columnName))
-                //    .FirstOrDefaultAsync() ?? defaultValue;
-                //// Execute the raw SQL query
-                //var basePremium3 = await dbContext.easyhealth_baserates
-                //    .FromSqlRaw(sql, siThree, insuredAgeThree, zone, c12)
-                //    .Select(r => EF.Property<decimal?>(r, columnName))
-                //    .FirstOrDefaultAsync() ?? defaultValue;
-                //var basePremium4 = await dbContext.easyhealth_baserates
-                //   .FromSqlRaw(sql, siFour, insuredAgeFour, zone, c12)
-                //   .Select(r => EF.Property<decimal?>(r, columnName))
-                //   .FirstOrDefaultAsync() ?? defaultValue;
-                //// Execute the raw SQL query
-                //var basePremium5 = await dbContext.easyhealth_baserates
-                //    .FromSqlRaw(sql, siFive, insuredAgeFive, zone, c12)
-                //    .Select(r => EF.Property<decimal?>(r, columnName))
-                //    .FirstOrDefaultAsync() ?? defaultValue;
-                //var basePremium6 = await dbContext.easyhealth_baserates
-                //   .FromSqlRaw(sql, siSix, insuredAgeSix, zone, c12)
-                //   .Select(r => EF.Property<decimal?>(r, columnName))
-                //   .FirstOrDefaultAsync() ?? defaultValue;
-
-                //var basePremiumvalues = new List<decimal?> { basePremium1, basePremium2, basePremium3, basePremium4, basePremium5, basePremium6 };
-                string condition = policyType; 
+               string condition = policyType; 
 
                 decimal? basePremium = GetBasePremium(condition, basePremiumsList);
 
-                // Base Premium Loading
                 decimal? basePremLoadingInsured1 = GetBasePremLoadingInsured1(0, basePremiumsList, basicLoadingRates);
                 decimal? basePremLoadingInsured2 = GetBasePremLoadingInsured1(1, basePremiumsList, basicLoadingRates);
                 decimal? basePremLoadingInsured3 = GetBasePremLoadingInsured1(2, basePremiumsList, basicLoadingRates);
@@ -803,17 +724,17 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 decimal? basePremLoadingInsured5 = GetBasePremLoadingInsured1(4, basePremiumsList, basicLoadingRates);
                 decimal? basePremLoadingInsured6 = GetBasePremLoadingInsured1(5, basePremiumsList, basicLoadingRates);
                 var loadingPremvalues = new List<decimal?> { basePremLoadingInsured1 + basePremLoadingInsured2 + basePremLoadingInsured3 + basePremLoadingInsured4 + basePremLoadingInsured5 + basePremLoadingInsured6 }; //c62
-                decimal? basePremLoading = loadingPremvalues.Sum();
+                decimal? basePremLoading = loadingPremvalues.Sum() ?? 0;
 
-                decimal? easyHealthBaseAndLoadingPremium = basePremium + basePremLoading;
-                decimal? easyHealthLoyaltyDiscount = loyaltyDiscountValue / 100 * easyHealthBaseAndLoadingPremium;
-                decimal? easyHealthEmployeeDiscount = employeeDiscountValue / 100 * easyHealthBaseAndLoadingPremium;
-                decimal? easyHealthOnlineDiscount = (onlineDiscountValue / 100) * easyHealthBaseAndLoadingPremium;
-                decimal? easyHealthFamilyDiscount = familyDiscountValue * easyHealthBaseAndLoadingPremium;
-                decimal? easyHealthLongTermDiscount = (easyHealthBaseAndLoadingPremium - (easyHealthLoyaltyDiscount + easyHealthEmployeeDiscount + easyHealthOnlineDiscount + easyHealthFamilyDiscount)) * longTermDiscount;
-                decimal? easyHealthORasePremium = easyHealthBaseAndLoadingPremium - (easyHealthLoyaltyDiscount + easyHealthEmployeeDiscount + easyHealthOnlineDiscount + easyHealthFamilyDiscount + easyHealthLongTermDiscount);
+                decimal? easyHealthBaseAndLoadingPremium = (basePremium + basePremLoading) ?? 0;
+                decimal? easyHealthLoyaltyDiscount = ((loyaltyDiscountValue / 100) * easyHealthBaseAndLoadingPremium) ?? 0;
+                decimal? easyHealthEmployeeDiscount = ((employeeDiscountValue / 100 )* easyHealthBaseAndLoadingPremium) ?? 0;
+                decimal? easyHealthOnlineDiscount = ((onlineDiscountValue / 100) * easyHealthBaseAndLoadingPremium) ?? 0;
+                decimal? easyHealthFamilyDiscount = (familyDiscountValue * easyHealthBaseAndLoadingPremium) ?? 0;
+                decimal? easyHealthLongTermDiscount = ((easyHealthBaseAndLoadingPremium - (easyHealthLoyaltyDiscount + easyHealthEmployeeDiscount + easyHealthOnlineDiscount + easyHealthFamilyDiscount)) * longTermDiscount) ?? 0;
+                decimal? easyHealthORasePremium = (easyHealthBaseAndLoadingPremium - (easyHealthLoyaltyDiscount + easyHealthEmployeeDiscount + easyHealthOnlineDiscount + easyHealthFamilyDiscount + easyHealthLongTermDiscount)) ?? 0;
 
-                // Critical Illness Rider
+        
                 decimal? SI = 0;
                 string criticalIllnessRideropt = "N";
                 decimal? ci_si_1 = 0;
@@ -854,39 +775,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                         }
                         indexci++;
                     }
-                }
-                //  var sqlci = $@"
-                //  SELECT {columnName}
-                //  FROM easyhealth_cirates
-                //  WHERE age = @p0  AND si = @p1";
-
-                //  // Execute the raw SQL query
-                //  decimal criticalIllnessRiderInsured1 = await dbContext.easyhealth_cirates
-                //  .FromSqlRaw(sqlci, insuredAgeOne, ci_si_1)
-                //      .Select(r => EF.Property<decimal?>(r, columnName))
-                //      .FirstOrDefaultAsync() ?? 0;
-                //  decimal criticalIllnessRiderInsured2 = await dbContext.easyhealth_cirates
-                // .FromSqlRaw(sqlci, insuredAgeTwo, ci_si_2)
-                //     .Select(r => EF.Property<decimal?>(r, columnName))
-                //     .FirstOrDefaultAsync() ?? 0;
-                //  decimal criticalIllnessRiderInsured3 = await dbContext.easyhealth_cirates
-                // .FromSqlRaw(sqlci, insuredAgeThree, ci_si_3)
-                //     .Select(r => EF.Property<decimal?>(r, columnName))
-                //     .FirstOrDefaultAsync() ?? 0;
-                //  decimal criticalIllnessRiderInsured4 = await dbContext.easyhealth_cirates
-                // .FromSqlRaw(sqlci, insuredAgeFour, ci_si_4)
-                //   .Select(r => EF.Property<decimal?>(r, columnName))
-                //   .FirstOrDefaultAsync() ?? 0;
-                //  decimal criticalIllnessRiderInsured5 = await dbContext.easyhealth_cirates
-                // .FromSqlRaw(sqlci, insuredAgeFive, ci_si_5)
-                //     .Select(r => EF.Property<decimal?>(r, columnName))
-                //     .FirstOrDefaultAsync() ?? 0;
-                //  decimal criticalIllnessRiderInsured6 = await dbContext.easyhealth_cirates
-                //.FromSqlRaw(sqlci, insuredAgeSix, ci_si_6)
-                //    .Select(r => EF.Property<decimal?>(r, columnName))
-                //    .FirstOrDefaultAsync() ?? 0;
-                //decimal? criticalIllnessRiderBasePremium = criticalIllnessRiderInsured1 + criticalIllnessRiderInsured2 + criticalIllnessRiderInsured3 + criticalIllnessRiderInsured4 + criticalIllnessRiderInsured5 + criticalIllnessRiderInsured6;
-
+                }         
                 List<decimal?> ciratesList = new List<decimal?>();
                 decimal? ciRiderinsured = 0;
                 for (int i = 0; i < noOfMembers; i++)
@@ -912,12 +801,11 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                     throw new ArgumentException($"Invalid policy period: {policyPeriod}");
                 }
 
-                // Critical Illness Rider Premiums
+            
                 decimal? criticalIllnessRiderFamilyDiscount = 0;
-                decimal? criticalIllnessRiderLongTermDiscount = (ciRiderinsured - criticalIllnessRiderFamilyDiscount) * longTermDiscount;
-                decimal? criticalIllnessRiderPremium = ciRiderinsured - criticalIllnessRiderFamilyDiscount - criticalIllnessRiderLongTermDiscount;
+                decimal? criticalIllnessRiderLongTermDiscount = ((ciRiderinsured - criticalIllnessRiderFamilyDiscount) * longTermDiscount) ?? 0;
+                decimal? criticalIllnessRiderPremium = (ciRiderinsured - criticalIllnessRiderFamilyDiscount - criticalIllnessRiderLongTermDiscount)??0;
 
-                // Critical Advantage Rider
                 string criticalAdvantageRideropt = "N";
                 decimal? caSI = 0;
                 decimal? ca_si_1 = 0;
@@ -977,39 +865,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
 
                     criticalAdvantageList.Add(criticalAdvantageRiderInsured);
                 }
-
-                //  var sqlca = $@"
-                //  SELECT {columnName}
-                //  FROM easyhealth_carates
-                //  WHERE age = @p0  AND si = @p1";
-                //  // Execute the raw SQL query
-                //  decimal criticalAdvantageRiderInsured1 = await dbContext.easyhealth_carates
-                //  .FromSqlRaw(sqlca, insuredAgeOne, ca_si_1)
-                //      .Select(r => EF.Property<decimal?>(r, columnName))
-                //      .FirstOrDefaultAsync() ?? 0;
-                //  decimal criticalAdvantageRiderInsured2 = await dbContext.easyhealth_carates
-                // .FromSqlRaw(sqlca, insuredAgeTwo, ca_si_2)
-                //     .Select(r => EF.Property<decimal?>(r, columnName))
-                //     .FirstOrDefaultAsync() ?? 0;
-                //  decimal criticalAdvantageRiderInsured3 = await dbContext.easyhealth_carates
-                // .FromSqlRaw(sqlca, insuredAgeThree, ca_si_3)
-                //     .Select(r => EF.Property<decimal?>(r, columnName))
-                //     .FirstOrDefaultAsync() ?? 0;
-                //  decimal criticalAdvantageRiderInsured4 = await dbContext.easyhealth_carates
-                // .FromSqlRaw(sqlca, insuredAgeFour, ca_si_4)
-                //   .Select(r => EF.Property<decimal?>(r, columnName))
-                //   .FirstOrDefaultAsync() ?? 0;
-                //  decimal criticalAdvantageRiderInsured5 = await dbContext.easyhealth_carates
-                // .FromSqlRaw(sqlca, insuredAgeFive, ca_si_5)
-                //     .Select(r => EF.Property<decimal?>(r, columnName))
-                //     .FirstOrDefaultAsync() ?? 0;
-                //  decimal criticalAdvantageRiderInsured6 = await dbContext.easyhealth_carates
-                //.FromSqlRaw(sqlca, insuredAgeSix, ca_si_6)
-                //    .Select(r => EF.Property<decimal?>(r, columnName))
-                //    .FirstOrDefaultAsync() ?? 0;
-                //  decimal? criticalAdvantageRiderBasePremium = criticalAdvantageRiderInsured1 + criticalAdvantageRiderInsured2 + criticalAdvantageRiderInsured3 + criticalAdvantageRiderInsured4 + criticalAdvantageRiderInsured5 + criticalAdvantageRiderInsured6;
-
-                // Critical Advantage Rider Loading
+               
                 List<decimal?> adjustedLoadingRates = basicLoadingRates.Select(rate => rate / 100).ToList();
                 decimal? criticalAdvantageRiderLoadingInsured1 = GetCARRiderLoadingInsured1(criticalAdvantageList,0, adjustedLoadingRates);
                 decimal? criticalAdvantageRiderLoadingInsured2 = GetCARRiderLoadingInsured1(criticalAdvantageList,1, adjustedLoadingRates);
@@ -1017,16 +873,14 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 decimal? criticalAdvantageRiderLoadingInsured4 = GetCARRiderLoadingInsured1(criticalAdvantageList,3, adjustedLoadingRates);
                 decimal? criticalAdvantageRiderLoadingInsured5 = GetCARRiderLoadingInsured1(criticalAdvantageList,4, adjustedLoadingRates);
                 decimal? criticalAdvantageRiderLoadingInsured6 = GetCARRiderLoadingInsured1(criticalAdvantageList,5, adjustedLoadingRates);
-                decimal? criticalAdvantageRiderLoading = GetCriticalAdvantageRiderLoading(policyType, criticalAdvantageRiderLoadingInsured1, criticalAdvantageRiderLoadingInsured2, criticalAdvantageRiderLoadingInsured3, criticalAdvantageRiderLoadingInsured4, criticalAdvantageRiderLoadingInsured5, criticalAdvantageRiderLoadingInsured6);
+                decimal? criticalAdvantageRiderLoading =( GetCriticalAdvantageRiderLoading(policyType, criticalAdvantageRiderLoadingInsured1, criticalAdvantageRiderLoadingInsured2, criticalAdvantageRiderLoadingInsured3, criticalAdvantageRiderLoadingInsured4, criticalAdvantageRiderLoadingInsured5, criticalAdvantageRiderLoadingInsured6))??0;
 
-                // Critical Advantage Rider Premium
-                decimal? criticalAdvRiderBaseLoadingPremium = criticalAdvantageRiderInsured + criticalAdvantageRiderLoading;
-                decimal? criticalAdvRiderPremiumLongTermDiscount = criticalAdvRiderBaseLoadingPremium * (longTermDiscount);
-                decimal? criticalAdvRiderPremium = criticalAdvRiderBaseLoadingPremium - criticalAdvRiderPremiumLongTermDiscount;
+                decimal? criticalAdvRiderBaseLoadingPremium =(criticalAdvantageRiderInsured + criticalAdvantageRiderLoading) ?? 0;
+                decimal? criticalAdvRiderPremiumLongTermDiscount = (criticalAdvRiderBaseLoadingPremium * (longTermDiscount)) ?? 0;
+                decimal? criticalAdvRiderPremium = (criticalAdvRiderBaseLoadingPremium - criticalAdvRiderPremiumLongTermDiscount) ??0;
 
-                // Hospital Daily Cash Rider
-                string Opt = "N"; //need to calculate 
-                decimal? hdcSI = 0;//rider_si_11 
+                string Opt = "N"; 
+                decimal? hdcSI = 0;
                 if (siRiderThreeDataTable.Rows.Count >= 1)
                 {
                     foreach (DataRow itemRow in siRiderThreeDataTable.Rows)
@@ -1046,17 +900,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 if (policyType == "Individual")
                 {
                     familysize = "1 Adult";
-                };
-                //var sqlhdc = $@"
-                //SELECT {columnName}
-                //FROM easyhealth_hdcrates
-                //WHERE age = @p0  AND suminsured = @p1 AND plan = @p2";
-                //// Execute the raw SQL query
-                //var hdcOpt = await dbContext.easyhealth_hdcrates
-                // .FromSqlRaw(sqlhdc, insuredageone, siOne, familysize)
-                // .Select(r => EF.Property<decimal?>(r, columnName))
-                // .FirstOrDefaultAsync();
-
+                };               
                 List<decimal?> hdcratesList = new List<decimal?>();
                 decimal? hdcRate = 0;
                 for (int i = 0; i < noOfMembers; i++)
@@ -1089,34 +933,33 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 decimal? hdcFamilyDiscount;
                 if (policytype == "Individual")
                 {
-                    hdcFamilyDiscount = hdcRiderPremiumsfinalvalue * familyDiscountPRHDC / 100;
+                    hdcFamilyDiscount =(hdcRiderPremiumsfinalvalue * familyDiscountPRHDC / 100) ?? 0;
                 }
                 else
                 {
-                    hdcFamilyDiscount = hdcRiderPremium * familyDiscountPRHDC;
+                    hdcFamilyDiscount = (hdcRiderPremium * familyDiscountPRHDC) ?? 0;
                 }
 
                 decimal? hdcLongTermDiscount;
                 if (policytype == "Individual")
                 {
-                    hdcLongTermDiscount = (hdcRiderPremiumsfinalvalue - hdcFamilyDiscount) * longTermDiscount;
+                    hdcLongTermDiscount = ((hdcRiderPremiumsfinalvalue - hdcFamilyDiscount) * longTermDiscount) ?? 0;
                 }
                 else
                 {
-                    hdcLongTermDiscount = (hdcRiderPremium - familyDiscountPRHDC) * (longTermDiscount);
+                    hdcLongTermDiscount = ((hdcRiderPremium - familyDiscountPRHDC) * (longTermDiscount)) ?? 0;
                 }
                 decimal? hdcFinalPremium;
                 if (policytype == "Individual")
                 {
-                    hdcFinalPremium = hdcRiderPremiumsfinalvalue - hdcFamilyDiscount - hdcLongTermDiscount;
+                    hdcFinalPremium = (hdcRiderPremiumsfinalvalue - hdcFamilyDiscount - hdcLongTermDiscount) ?? 0;
                 }
                 else
                 {
-                    hdcFinalPremium = (hdcRiderPremium ?? 0) - hdcFamilyDiscount - hdcLongTermDiscount;
+                    hdcFinalPremium = ((hdcRiderPremium ?? 0) - hdcFamilyDiscount - hdcLongTermDiscount) ?? 0;
                 }
-                // Individual Personal Accident Rider
-
-                string individualpersonalARopt = "N"; //need to calculate and add the logic hardcoded as of now
+                
+                string individualpersonalARopt = "N"; 
                 if (siRiderFourDataTable.Rows.Count >= 1)
                 {
                     foreach (DataRow itemRow in siRiderFourDataTable.Rows)
@@ -1124,14 +967,13 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                         individualpersonalARopt = "Y";
                     }
                 }
-                decimal? individualpersonalARSI = GetIndividualPersonalARSI(individualpersonalARopt, sumInsuredList);
+                decimal? individualpersonalARSI = (GetIndividualPersonalARSI(individualpersonalARopt, sumInsuredList)) ?? 0;
                 var policystartdate = row.policy_start_date;
                 var policyenddate = row.policy_expiry_date;
                 decimal? individualpersonalARAmt = GetIndividualPersonalARAmt(individualpersonalARopt, individualpersonalARSI, policystartdate, policyenddate);
-                decimal? individualpersonalARLongTermDiscount = individualpersonalARAmt * longTermDiscount;
-                decimal? individualPersonalAccidentRiderPremium = individualpersonalARAmt - individualpersonalARLongTermDiscount;
+                decimal? individualpersonalARLongTermDiscount = (individualpersonalARAmt * longTermDiscount)?? 0;
+                decimal? individualPersonalAccidentRiderPremium = (individualpersonalARAmt - individualpersonalARLongTermDiscount) ?? 0;
 
-                // Protecter Rider
                 string propt = "N";
 
                 if (siRiderFiveDataTable.Rows.Count >= 1)
@@ -1151,73 +993,38 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 decimal? prInsured6 = GetProtectorRiderInsured1(propt,5, sumInsuredList, basePremiumsList);
                 decimal? prProtectorRiderPremium = GetProtectorRiderPremium(policyType, prInsured1, prInsured2, prInsured3, prInsured4, prInsured5, prInsured6);
 
-                // Protector Rider Loading
-                decimal? prLoadingInsured1 = 0;//GetProtectorRiderLoadingInsured1(prInsured1, basicLoadingRateOne / 100);
-                decimal? prLoadingInsured2 = 0; // GetProtectorRiderLoadingInsured2(prInsured2, basicLoadingRateTwo / 100);
-                decimal? prLoadingInsured3 = 0;// GetProtectorRiderLoadingInsured3(prInsured3, basicLoadingRateThree / 100);
-                decimal? prLoadingInsured4 = 0; // GetProtectorRiderLoadingInsured4(prInsured4, basicLoadingRateFour / 100);
-                decimal? prLoadingInsured5 = 0; // GetProtectorRiderLoadingInsured5(prInsured5, basicLoadingRateFive / 100);
-                decimal? prLoadingInsured6 = 0; // GetProtectorRiderLoadingInsured6(prInsured6, basicLoadingRateSix / 100);
+                decimal? prLoadingInsured1 = 0;
+                decimal? prLoadingInsured2 = 0; 
+                decimal? prLoadingInsured3 = 0;
+                decimal? prLoadingInsured4 = 0;
+                decimal? prLoadingInsured5 = 0; 
+                decimal? prLoadingInsured6 = 0; 
                 decimal? ProtectorRiderLoadingPremium = prLoadingInsured1 + prLoadingInsured2 + prLoadingInsured3 + prLoadingInsured4 + prLoadingInsured5 + prLoadingInsured6;
 
-                // Protector Rider Premium
-                decimal? prBaseLoadingPremium = prProtectorRiderPremium + ProtectorRiderLoadingPremium;
-                decimal? prFamilyDiscount = prProtectorRiderPremium * (familyDiscountPRHDC / 100);
+                decimal? prBaseLoadingPremium =( prProtectorRiderPremium + ProtectorRiderLoadingPremium) ?? 0;
+                decimal? prFamilyDiscount = (prProtectorRiderPremium * (familyDiscountPRHDC / 100))?? 0;
                 decimal? prLongTermDiscount = (prBaseLoadingPremium - prFamilyDiscount) * (longTermDiscount);
-                decimal? prpremiumProtectorRiderPremium = prBaseLoadingPremium - prFamilyDiscount - prLongTermDiscount;
+                decimal? prpremiumProtectorRiderPremium = (prBaseLoadingPremium - prFamilyDiscount - prLongTermDiscount) ?? 0;
 
-                decimal? netPremium = (easyHealthORasePremium + criticalIllnessRiderPremium + hdcFinalPremium + prpremiumProtectorRiderPremium + individualPersonalAccidentRiderPremium + criticalAdvRiderPremium);
-                decimal? GST = netPremium * 0.18m;
-                decimal? finalPremium = netPremium + GST;
-                decimal? Crosscheck = row.num_tot_premium - finalPremium;
-                decimal? Crosscheck1 = row.num_tot_premium - finalPremium;
+                decimal? netPremium = ((easyHealthORasePremium + criticalIllnessRiderPremium + hdcFinalPremium + prpremiumProtectorRiderPremium + individualPersonalAccidentRiderPremium + criticalAdvRiderPremium))??0;
+                decimal? GST = (netPremium * 0.18m) ?? 0 ;
+                decimal? finalPremium = (netPremium + GST) ?? 0;
+                decimal? Crosscheck = (row.num_tot_premium - finalPremium) ?? 0;              
+
+                try
+                {
+                    await HandlePremiumCrosschecksAndUpdateStatus(policyNo, row, Crosscheck, netPremium, finalPremium, GST);
+                }
+                catch (DbUpdateConcurrencyException ex)
+                {
+                    var entry = ex.Entries.Single();
+                    await entry.ReloadAsync();
+                }
+                catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "40P01")
+                {
+
+                }
                
-                var record = dbContext.premium_validation.FirstOrDefault(item => item.certificate_no == policNo16.ToString());
-                if (record != null)
-                {
-                    record.verified_prem = netPremium ?? 0;
-                    record.verified_gst = GST ?? 0 ;
-                    record.verified_total_prem = finalPremium ?? 0;
-                    dbContext.premium_validation.Update(record);
-                }
-                else
-                {
-                    var newRecord = new premium_validation
-                    {
-                        certificate_no = policyNo.ToString(),
-                        verified_prem = netPremium ?? 0,
-                        verified_gst = GST ?? 0,
-                        verified_total_prem = finalPremium ?? 0
-                    };
-                    dbContext.premium_validation.Add(newRecord);
-                }
-                int maxRetries = 5;
-                int attempt = 0;
-                int baseDelay = 1000; // Base delay in milliseconds
-                Random rng = new Random();
-                while (attempt < maxRetries)
-                {
-                    try
-                    {
-                        await dbContext.SaveChangesAsync();
-                        break;  // Exit if successful
-                    }
-                    catch (DbUpdateConcurrencyException ex)
-                    {
-                        var entry = ex.Entries.Single();
-                        await entry.ReloadAsync();
-                    }
-                    catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "40P01")
-                    {
-                        attempt++;
-                        if (attempt >= maxRetries)
-                            throw;  // Rethrow if max retries exceeded
-
-                        int delay = baseDelay * (int)Math.Pow(2, attempt) + rng.Next(0, 500);  // Random jitter added
-                        await Task.Delay(delay);
-                    }
-                }
-
             }
 
         }
@@ -1339,7 +1146,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 return 0;
             }
         }
-        
+
         //static decimal? GetBasePremLoadingInsured2(decimal? basepremium2, decimal? base_loading_insured_2)
         //{
 
@@ -1353,7 +1160,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         //        return 0;
         //    }
         //}
-        
+
         //static decimal? GetBasePremLoadingInsured3(decimal? basepremium3, decimal? base_loading_insured_3)
         //{
         //    if (base_loading_insured_3.HasValue && base_loading_insured_3 != 0)
@@ -1366,7 +1173,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         //        return 0;
         //    }
         //}
-        
+
         //static decimal? GetBasePremLoadingInsured4(decimal? basepremium4, decimal? base_loading_insured_4)
         //{
         //    if (base_loading_insured_4.HasValue && base_loading_insured_4 != 0)
@@ -1379,7 +1186,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         //        return 0;
         //    }
         //}
-        
+
         //static decimal? GetBasePremLoadingInsured5(decimal? basepremium5, decimal? base_loading_insured_5)
         //{
         //    if (base_loading_insured_5.HasValue && base_loading_insured_5 != 0)
@@ -1392,7 +1199,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         //        return 0;
         //    }
         //}
-        
+
         //static decimal? GetBasePremLoadingInsured6(decimal? basepremium6, decimal? base_loading_insured_6)
         //{
         //    if (base_loading_insured_6.HasValue && base_loading_insured_6 != 0)
@@ -1405,31 +1212,28 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         //        return 0;
         //    }
         //}
-        
+
         static decimal? GetCARRiderLoadingInsured1(List<decimal?> sumInsuredList, int i, List<decimal?> baseLoadingRates)
         {
             try
             {
                 if (sumInsuredList[i].HasValue && baseLoadingRates[i].HasValue)
                 {
-                    decimal loadingRate = baseLoadingRates[i].Value;
-
-                    decimal loadingAmount = sumInsuredList[i].Value * loadingRate;
-                    return loadingAmount;
+                    return sumInsuredList[i].Value * baseLoadingRates[i].Value;
                 }
                 else
                 {
-
-                    return 0;
+                    return (decimal?)0;  // Return 0 as a decimal?
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error calculating loading amount: {ex.Message}");
-                return 0;
+                return (decimal?)0;  // Return 0 as a decimal? in case of error
             }
         }
-        
+
+
         //static decimal? GetCARRiderLoadingInsured2(decimal? si_2, decimal? loading_per_insured_2)
         //{
         //    try
@@ -1525,7 +1329,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         //        return 0;
         //    }
         //}
-        
+
         //static decimal? GetCARRiderLoadingInsured6(decimal? si_6, decimal? loading_per_insured_6)
         //{
         //    try
@@ -1549,7 +1353,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         //        return 0;
         //    }
         //}
-        
+
         static decimal? GetCriticalAdvantageRiderLoading(string policyType, decimal? criticalAdvantageRiderLoadingInsured1, decimal? criticalAdvantageRiderLoadingInsured2, decimal? criticalAdvantageRiderLoadingInsured3, decimal? criticalAdvantageRiderLoadingInsured4, decimal? criticalAdvantageRiderLoadingInsured5, decimal? criticalAdvantageRiderLoadingInsured6)
         {
             var premiums = new List<decimal?> { criticalAdvantageRiderLoadingInsured1, criticalAdvantageRiderLoadingInsured2, criticalAdvantageRiderLoadingInsured3, criticalAdvantageRiderLoadingInsured4, criticalAdvantageRiderLoadingInsured5, criticalAdvantageRiderLoadingInsured6 };
@@ -2012,9 +1816,13 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         }
         public List<List<string>> FetchNewBatchIds(NpgsqlConnection postgresConnection)
         {
-            string status = ConfigurationManager.AppSettings["Status"];
-            var sqlSource = $"SELECT ir.certificate_no, ir.product_code FROM ins.idst_renewal_data_rgs ir INNER JOIN ins.rne_healthtab ht" +
-                $" ON ir.certificate_no = ht.policy_number WHERE ir.rn_generation_status = @Status AND ht.prod_code in (2806)";
+            string? status = ConfigurationManager.AppSettings["Status"];
+            var sqlSource = $"SELECT distinct ir.certificate_no, ir.product_code FROM " +
+                $" ins.idst_renewal_data_rgs ir INNER JOIN ins.rne_healthtab ht " +
+                $" ON ir.certificate_no = ht.policy_number " +
+                $" WHERE ir.rn_generation_status ='Reconciliation Successful' AND ht.prod_code = 2806 " +
+                $" AND ht.upselltype1 is null AND ht.upselltype2 is null AND ht.upselltype3 is null  " +
+                $" AND ht.upselltype4 is null AND ht.upselltype5 is null  ";
             var sourceResults = postgresConnection.Query(sqlSource, new { Status = status });
             var sourceBatchIds = new List<List<string>>();
             foreach (var result in sourceResults)
@@ -2024,7 +1832,6 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
             }
             return sourceBatchIds;
         }
-
         public class IdstData
         {
             public string certificate_no { get; set; }
