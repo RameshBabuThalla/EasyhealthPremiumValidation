@@ -79,6 +79,7 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
         {
             List<string> idPlaceholders = new List<string>();
             var listofpolicies = easyHealth.FetchNewBatchIds(postgresConnection);
+            Console.Write("Listofpolicies" , listofpolicies.Count);
             using (var scope = host.Services.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<HDFCDbContext>();
@@ -104,7 +105,7 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
                                     if (ehRNEData != null && ehRNEData.Any())
                                     {
                                         await easyHealth.GetEasyHealthValidation(ehRNEData, certificateNo, baserates, hdcrates, carates, cirates);
-                                    }
+                                     }
                                 }
                                 finally
                                 {

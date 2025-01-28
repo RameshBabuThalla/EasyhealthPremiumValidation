@@ -35,8 +35,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
 
 
         public async Task GetEasyHealthValidation(IEnumerable<EasyHealthRNE> ehRNEData, string policyNo, Dictionary<string, Hashtable> baseRateHashTable, Dictionary<string, Hashtable> hdcRatesTable, Dictionary<string, Hashtable> caRatesTable, Dictionary<string, Hashtable> ciRatesTable)
-        {
-            _logger.LogInformation("EasyHealthPremiumValidation is Started!");
+        {          
            await CalculateEasyHealthPremium(ehRNEData,policyNo, baseRateHashTable, hdcRatesTable, caRatesTable, ciRatesTable);
 
         }
@@ -87,7 +86,6 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                             });
 
                         }
-
                     }
                 }
 
