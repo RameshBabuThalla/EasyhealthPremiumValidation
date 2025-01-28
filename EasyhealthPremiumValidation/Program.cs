@@ -19,8 +19,7 @@ using DocumentFormat.OpenXml.InkML;
 using System.Collections;
 
 var builder = Host.CreateDefaultBuilder(args).ConfigureLogging((context, logging) =>
-{
-    // Set the log level for EF Core commands to a higher level (e.g., Warning, Error, etc.)
+{    
     logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
 });
 string logFilePath = @"C:\temp\EasyHealthPremiumValidationSchedular\EasyHealthPremiumValidationSchedular_log.txt";
@@ -69,8 +68,6 @@ var serviceProvider = new ServiceCollection().AddLogging(logging => logging.AddS
         options.UseNpgsql(connectionString))
     .AddTransient<EasyHealth>()
       .BuildServiceProvider();
-
-//var dbContextFactory = host.Services.GetRequiredService<IDbContextFactory<HDFCDbContext>>();
 var easyHealth = serviceProvider.GetService<EasyHealth>();
 string postgresConnectionString = ConfigurationManager.ConnectionStrings["PostgresDb"].ConnectionString;
 using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
@@ -78,80 +75,51 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
     try
     {
         postgresConnection.Open();
-        //using (var transaction = postgresConnection.BeginTransaction())
-        //{
         try
         {
             List<string> idPlaceholders = new List<string>();
             var listofpolicies = easyHealth.FetchNewBatchIds(postgresConnection);
-            Console.WriteLine(listofpolicies.Count);
-
-            if (listofpolicies.Count > 0)
+            using (var scope = host.Services.CreateScope())
             {
-                foreach (var item in listofpolicies)
+                var dbContext = scope.ServiceProvider.GetRequiredService<HDFCDbContext>();
+                var baserates = await easyHealth.GetBaseRatesAsync(dbContext);
+                var cirates = await easyHealth.GetCiRatesAsync(dbContext);
+                var hdcrates = await easyHealth.GetHdcRatesAsync(dbContext);
+                var carates = await easyHealth.GetCARatesAsync(dbContext);
+                if (listofpolicies.Count > 0)
                 {
-                    //var tasks = Enumerable.Range(0, 10).Select(async i =>
-                    //{
-                        using (var scope = host.Services.CreateScope())
+                    var tasks = new List<System.Threading.Tasks.Task>();
+                    {
+                        var semaphore = new SemaphoreSlim(10);
+                        foreach (var item in listofpolicies)
                         {
-                            var dbContext = scope.ServiceProvider.GetRequiredService<HDFCDbContext>();
-                            var baserates = await easyHealth.GetBaseRatesAsync(dbContext);//easyhealth_baserates
-                            var cirates = await easyHealth.GetCiRatesAsync(dbContext);//easyhealth_cirates
-                            var hdcrates = await easyHealth.GetHdcRatesAsync(dbContext);//easyhealth_hdcrates
-                            var carates = await easyHealth.GetCARatesAsync(dbContext);//easyhealth_carates
-
-                            string certificateNo = item[0];  // First item is certificate_no
-
-                            string productCode = item[1];
-                            // Resolve a new instance of DbContext for each task
-                            var ehRNEData = await easyHealth.GetGCEasyHealthDataAsync(certificateNo, dbContext);
-                            if (productCode == "2806")
+                            var task = System.Threading.Tasks.Task.Run(async () =>
                             {
-                                await easyHealth.GetEasyHealthValidation(ehRNEData, certificateNo, dbContext,baserates, hdcrates, carates, cirates);
-                            }
-                            else
-                            {
-                                Console.WriteLine($"No validation found for value: {certificateNo}");
-                            }
-
+                                await semaphore.WaitAsync();
+                                try
+                                {
+                                    string certificateNo = item[0];
+                                    string productCode = item[1];
+                                    var ehRNEData = await easyHealth.GetGCEasyHealthDataAsync(certificateNo);
+                                    if (ehRNEData != null && ehRNEData.Any())
+                                    {
+                                        await easyHealth.GetEasyHealthValidation(ehRNEData, certificateNo, baserates, hdcrates, carates, cirates);
+                                    }
+                                }
+                                finally
+                                {
+                                    semaphore.Release();
+                                }
+                            });
+                            tasks.Add(task);
                         }
-                    //}).ToList();
+                        await System.Threading.Tasks.Task.WhenAll(tasks);
 
-                    //await System.Threading.Tasks.Task.WhenAll(tasks);
-
+                    }
                 }
-                Console.Write("Upsell calculation started");
-                //foreach (var item in listofpolicies)
-                //{
-                //    var tasks = Enumerable.Range(0, 10).Select(async i =>
-                //    {
-                //        using (var scope = host.Services.CreateScope())
-                //        {
-                //            var dbContext = scope.ServiceProvider.GetRequiredService<HDFCDbContext>();
-                //            string certificateNo = item[0];  // First item is certificate_no
-                //            string productCode = item[1];
-                //            if (productCode == "2856")
-                //            {
-                //                var GCData = await optimaSecure.GetGCOptimaSecureDataAsync(certificateNo, dbContext);
-                //                IEnumerable<OptimaSecureRNE> OptimaSecureValidationResultUpSell = Enumerable.Empty<OptimaSecureRNE>();
-                //                foreach (var row1 in GCData)
-                //                {
-                //                    if (row1.upselltype1 == "SI_UPSELL" || row1.upselltype2 == "SI_UPSELL" || row1.upselltype3 == "SI_UPSELL" || row1.upselltype4 == "SI_UPSELL" || row1.upselltype5 == "SI_UPSELL" || row1.upselltype1 == "UPSELLBASESI_1" || row1.upselltype2 == "UPSELLBASESI_1" || row1.upselltype3 == "UPSELLBASESI_1" || row1.upselltype4 == "UPSELLBASESI_1" || row1.upselltype5 == "UPSELLBASESI_1")
-                //                    {
-                //                        OptimaSecureValidationResultUpSell = await optimaSecure.CalculateOptimaSecurePremiumqUpsell(GCData, certificateNo, dbContext);
-                //                        await optimaSecure.UpdateRnGenerationStatus(OptimaSecureValidationResultUpSell, dbContext);
-
-                //                        break;
-                //                    }
-                //                }
-                //            }
-                //        }
-                //    }).ToList();
-                //    await System.Threading.Tasks.Task.WhenAll(tasks);
-                //}      //transaction.Commit();
-
             }
         }
+
         catch (Exception ex)
         {
             //transaction.Rollback();
