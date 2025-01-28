@@ -79,7 +79,7 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
         {
             List<string> idPlaceholders = new List<string>();
             var listofpolicies = easyHealth.FetchNewBatchIds(postgresConnection);
-            Console.Write("Listofpolicies" , listofpolicies.Count);
+            Console.Write("Listofpolicies"  + " " +listofpolicies.Count);
             using (var scope = host.Services.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<HDFCDbContext>();
