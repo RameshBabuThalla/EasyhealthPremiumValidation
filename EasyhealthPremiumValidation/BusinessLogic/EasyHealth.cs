@@ -16,6 +16,7 @@ using Oracle.ManagedDataAccess.Client;
 using Microsoft.Extensions.Logging;
 using System.Configuration;
 using System.Collections;
+using Serilog;
 
 namespace HERGPremiumValidationSchedular.BussinessLogic
 {
@@ -443,7 +444,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
             return dictionary;
         }
 
-        public async Task<IEnumerable<dynamic>> GetIdstRenewalData(string policyNo)
+        public async Task<IEnumerable<IdstData>> GetIdstRenewalData(string policyNo)
         {
             string? connectionString = ConfigurationManager.ConnectionStrings["PostgresDb"].ConnectionString;
             string sqlQuery = @"
@@ -465,12 +466,21 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
             ins.idst_renewal_data_rgs
         WHERE
             certificate_no = @PolicyNo";
-            using (var connection = new NpgsqlConnection(connectionString))
+            try
             {
-                await connection.OpenAsync();
-                var result = await connection.QueryAsync(sqlQuery, new { PolicyNo = policyNo });
+                using (var connection = new NpgsqlConnection(connectionString))
+                {
+                    var result = await connection.QueryAsync<IdstData>(sqlQuery, new { PolicyNo = policyNo }).ConfigureAwait(false);
+                    return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the error (use your preferred logging mechanism)
+                Log.Error(ex, "An error occurred while fetching renewal data for policy: {PolicyNo}", policyNo);
 
-                return result;
+                // Optionally, handle the error here or return a default value like an empty list
+                return Enumerable.Empty<IdstData>();  // Returning an empty list in case of failure
             }
         }
         public static List<object> ExtractData(HERGPremiumValidationSchedular.Models.Domain.EasyHealthRNE easyHealthRNE)
@@ -786,12 +796,12 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 decimal? basePremium = GetBasePremium(condition, basePremiumsList);
 
                 // Base Premium Loading
-                decimal? basePremLoadingInsured1 = GetBasePremLoadingInsured1(1, basePremiumsList, basicLoadingRates);
-                decimal? basePremLoadingInsured2 = GetBasePremLoadingInsured1(2, basePremiumsList, basicLoadingRates);
-                decimal? basePremLoadingInsured3 = GetBasePremLoadingInsured1(3, basePremiumsList, basicLoadingRates);
-                decimal? basePremLoadingInsured4 = GetBasePremLoadingInsured1(4, basePremiumsList, basicLoadingRates);
-                decimal? basePremLoadingInsured5 = GetBasePremLoadingInsured1(5, basePremiumsList, basicLoadingRates);
-                decimal? basePremLoadingInsured6 = GetBasePremLoadingInsured1(6, basePremiumsList, basicLoadingRates);
+                decimal? basePremLoadingInsured1 = GetBasePremLoadingInsured1(0, basePremiumsList, basicLoadingRates);
+                decimal? basePremLoadingInsured2 = GetBasePremLoadingInsured1(1, basePremiumsList, basicLoadingRates);
+                decimal? basePremLoadingInsured3 = GetBasePremLoadingInsured1(2, basePremiumsList, basicLoadingRates);
+                decimal? basePremLoadingInsured4 = GetBasePremLoadingInsured1(3, basePremiumsList, basicLoadingRates);
+                decimal? basePremLoadingInsured5 = GetBasePremLoadingInsured1(4, basePremiumsList, basicLoadingRates);
+                decimal? basePremLoadingInsured6 = GetBasePremLoadingInsured1(5, basePremiumsList, basicLoadingRates);
                 var loadingPremvalues = new List<decimal?> { basePremLoadingInsured1 + basePremLoadingInsured2 + basePremLoadingInsured3 + basePremLoadingInsured4 + basePremLoadingInsured5 + basePremLoadingInsured6 }; //c62
                 decimal? basePremLoading = loadingPremvalues.Sum();
 
@@ -885,7 +895,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                    .Where(roww =>
                        roww.Value is Hashtable rateDetails &&
                        (int)rateDetails["age"] == eldestMember &&
-                       (int)rateDetails["suminsured"] == sumInsuredList[i])
+                       (int)rateDetails["si"] == sumInsuredList[i])
                    .Select(roww =>
                        roww.Value is Hashtable details && details[columnName] != null
                        ? Convert.ToDecimal(details[columnName])
@@ -1001,12 +1011,12 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
 
                 // Critical Advantage Rider Loading
                 List<decimal?> adjustedLoadingRates = basicLoadingRates.Select(rate => rate / 100).ToList();
-                decimal? criticalAdvantageRiderLoadingInsured1 = GetCARRiderLoadingInsured1(criticalAdvantageList,1, adjustedLoadingRates);
-                decimal? criticalAdvantageRiderLoadingInsured2 = GetCARRiderLoadingInsured1(criticalAdvantageList,2, adjustedLoadingRates);
-                decimal? criticalAdvantageRiderLoadingInsured3 = GetCARRiderLoadingInsured1(criticalAdvantageList,3, adjustedLoadingRates);
-                decimal? criticalAdvantageRiderLoadingInsured4 = GetCARRiderLoadingInsured1(criticalAdvantageList,4, adjustedLoadingRates);
-                decimal? criticalAdvantageRiderLoadingInsured5 = GetCARRiderLoadingInsured1(criticalAdvantageList,5, adjustedLoadingRates);
-                decimal? criticalAdvantageRiderLoadingInsured6 = GetCARRiderLoadingInsured1(criticalAdvantageList,6, adjustedLoadingRates);
+                decimal? criticalAdvantageRiderLoadingInsured1 = GetCARRiderLoadingInsured1(criticalAdvantageList,0, adjustedLoadingRates);
+                decimal? criticalAdvantageRiderLoadingInsured2 = GetCARRiderLoadingInsured1(criticalAdvantageList,1, adjustedLoadingRates);
+                decimal? criticalAdvantageRiderLoadingInsured3 = GetCARRiderLoadingInsured1(criticalAdvantageList,2, adjustedLoadingRates);
+                decimal? criticalAdvantageRiderLoadingInsured4 = GetCARRiderLoadingInsured1(criticalAdvantageList,3, adjustedLoadingRates);
+                decimal? criticalAdvantageRiderLoadingInsured5 = GetCARRiderLoadingInsured1(criticalAdvantageList,4, adjustedLoadingRates);
+                decimal? criticalAdvantageRiderLoadingInsured6 = GetCARRiderLoadingInsured1(criticalAdvantageList,5, adjustedLoadingRates);
                 decimal? criticalAdvantageRiderLoading = GetCriticalAdvantageRiderLoading(policyType, criticalAdvantageRiderLoadingInsured1, criticalAdvantageRiderLoadingInsured2, criticalAdvantageRiderLoadingInsured3, criticalAdvantageRiderLoadingInsured4, criticalAdvantageRiderLoadingInsured5, criticalAdvantageRiderLoadingInsured6);
 
                 // Critical Advantage Rider Premium
@@ -1065,16 +1075,16 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                    .FirstOrDefault();
                 }
 
-                decimal? hdcRiderPremium1 = await GetHDCRiderPremium1(policyPeriod, insuredageone, hdcSI, familysize, dbContext);
-                decimal? hdcRiderPremium2 = await GetHDCRiderPremium2(policyPeriod, insuredagetwo, hdcSI, familysize, dbContext);
-                decimal? hdcRiderPremium3 = await GetHDCRiderPremium3(policyPeriod, insuredagethree, hdcSI, familysize, dbContext);
-                decimal? hdcRiderPremium4 = await GetHDCRiderPremium4(policyPeriod, insuredagefour, hdcSI, familysize, dbContext);
-                decimal? hdcRiderPremium5 = await GetHDCRiderPremium5(policyPeriod, insuredagefive, hdcSI, familysize, dbContext);
-                decimal? hdcRiderPremium6 = await GetHDCRiderPremium6(policyPeriod, insuredagesix, hdcSI, familysize, dbContext);
+                decimal? hdcRiderPremium1 = await GetHDCRiderPremium1(policyPeriod, insuredageone, hdcSI, familysize, hdcRatesTable);
+                decimal? hdcRiderPremium2 = await GetHDCRiderPremium2(policyPeriod, insuredagetwo, hdcSI, familysize, hdcRatesTable);
+                decimal? hdcRiderPremium3 = await GetHDCRiderPremium3(policyPeriod, insuredagethree, hdcSI, familysize, hdcRatesTable);
+                decimal? hdcRiderPremium4 = await GetHDCRiderPremium4(policyPeriod, insuredagefour, hdcSI, familysize, hdcRatesTable);
+                decimal? hdcRiderPremium5 = await GetHDCRiderPremium5(policyPeriod, insuredagefive, hdcSI, familysize, hdcRatesTable);
+                decimal? hdcRiderPremium6 = await GetHDCRiderPremium6(policyPeriod, insuredagesix, hdcSI, familysize, hdcRatesTable);
                 var hdcRiderPremvalues = new List<decimal?> { hdcRiderPremium1 + hdcRiderPremium2 + hdcRiderPremium3 + hdcRiderPremium4 + hdcRiderPremium5 + hdcRiderPremium6 };
                 decimal? hdcRiderPremiumsfinalvalue = hdcRiderPremvalues.Sum();
 
-                decimal? hdcRiderPremium = await GetHDCRiderPremium(policyPeriod, eldestMember, hdcSI, familysize, dbContext);
+                decimal? hdcRiderPremium = await GetHDCRiderPremium(policyPeriod, eldestMember, hdcSI, familysize, hdcRatesTable);
                 var policytype = row.policy_type;
                 decimal? hdcFamilyDiscount;
                 if (policytype == "Individual")
@@ -1133,12 +1143,12 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
 
                     }
                 }
-                decimal? prInsured1 = GetProtectorRiderInsured1(propt,1, sumInsuredList, basePremiumsList);
-                decimal? prInsured2 = GetProtectorRiderInsured1(propt,2, sumInsuredList, basePremiumsList);
-                decimal? prInsured3 = GetProtectorRiderInsured1(propt,3, sumInsuredList, basePremiumsList);
-                decimal? prInsured4 = GetProtectorRiderInsured1(propt,4, sumInsuredList, basePremiumsList);
-                decimal? prInsured5 = GetProtectorRiderInsured1(propt,5, sumInsuredList, basePremiumsList);
-                decimal? prInsured6 = GetProtectorRiderInsured1(propt,6, sumInsuredList, basePremiumsList);
+                decimal? prInsured1 = GetProtectorRiderInsured1(propt,0, sumInsuredList, basePremiumsList);
+                decimal? prInsured2 = GetProtectorRiderInsured1(propt,1, sumInsuredList, basePremiumsList);
+                decimal? prInsured3 = GetProtectorRiderInsured1(propt,2, sumInsuredList, basePremiumsList);
+                decimal? prInsured4 = GetProtectorRiderInsured1(propt,3, sumInsuredList, basePremiumsList);
+                decimal? prInsured5 = GetProtectorRiderInsured1(propt,4, sumInsuredList, basePremiumsList);
+                decimal? prInsured6 = GetProtectorRiderInsured1(propt,5, sumInsuredList, basePremiumsList);
                 decimal? prProtectorRiderPremium = GetProtectorRiderPremium(policyType, prInsured1, prInsured2, prInsured3, prInsured4, prInsured5, prInsured6);
 
                 // Protector Rider Loading
@@ -1318,7 +1328,8 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
 
         static decimal? GetBasePremLoadingInsured1(int i, List<decimal?> basePremiumList, List<decimal?> baseLoadingRates)
         {
-            if (baseLoadingRates[i].HasValue && baseLoadingRates[i] != 0)
+            if (basePremiumList != null && baseLoadingRates != null &&
+         i >= 0 && i < basePremiumList.Count && i < baseLoadingRates.Count)
             {
                 return basePremiumList[i] * baseLoadingRates[i] / 100;
 
@@ -1558,142 +1569,155 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
 
         }
         
-        public async Task<decimal?> GetHDCRiderPremium1(string policyperiod, int? insuredageone, decimal? hdcSI, string familysize,HDFCDbContext dbContext)
+        public async Task<decimal?> GetHDCRiderPremium1(string policyperiod, int? insuredageone, decimal? hdcSI, string familysize, Dictionary<string, Hashtable> hdcRatesTable)
+        {
+            var column = GetColumnNameForPolicyPeriod(policyperiod);
+            if (string.IsNullOrEmpty(column))
+            {
+                return 0;
+            }
+            var rate = hdcRatesTable
+                    .Where(roww =>
+                       roww.Value is Hashtable rateDetails &&
+                       rateDetails["age"] != null && (rateDetails["age"] as int? ?? 0) == insuredageone &&
+                       rateDetails["suminsured"] != null && (rateDetails["suminsured"] as decimal? ?? 0) == hdcSI &&
+                       rateDetails["plan"] != null && rateDetails["plan"].ToString() == familysize
+                    )
+                    .Select(roww =>
+                       roww.Value is Hashtable details && details[column] != null
+                       ? Convert.ToDecimal(details[column])
+                       : (decimal?)null
+                    )
+                    .FirstOrDefault();
+
+            return rate ?? 0;
+
+        }
+        
+        public async Task<decimal?> GetHDCRiderPremium2(string policyperiod, int? insuredagetwo, decimal? hdcSI, string familysize, Dictionary<string, Hashtable> hdcRatesTable)
+        {
+            var column = GetColumnNameForPolicyPeriod(policyperiod);
+            var rate = hdcRatesTable
+                     .Where(roww =>
+                        roww.Value is Hashtable rateDetails &&
+                        rateDetails["age"] != null && (rateDetails["age"] as int? ?? 0) == insuredagetwo &&
+                        rateDetails["suminsured"] != null && (rateDetails["suminsured"] as decimal? ?? 0) == hdcSI &&
+                        rateDetails["plan"] != null && rateDetails["plan"].ToString() == familysize
+                     )
+                     .Select(roww =>
+                        roww.Value is Hashtable details && details[column] != null
+                        ? Convert.ToDecimal(details[column])
+                        : (decimal?)null
+                     )
+                     .FirstOrDefault();
+
+            return rate ?? 0;
+
+        }
+        
+        public async Task<decimal?> GetHDCRiderPremium3(string policyperiod, int? insuredagethree, decimal? hdcSI, string familysize, Dictionary<string, Hashtable> hdcRatesTable)
+        {
+            var column = GetColumnNameForPolicyPeriod(policyperiod);
+            var rate = hdcRatesTable
+                    .Where(roww =>
+                       roww.Value is Hashtable rateDetails &&
+                       rateDetails["age"] != null && (rateDetails["age"] as int? ?? 0) == insuredagethree &&
+                       rateDetails["suminsured"] != null && (rateDetails["suminsured"] as decimal? ?? 0) == hdcSI &&
+                       rateDetails["plan"] != null && rateDetails["plan"].ToString() == familysize
+                    )
+                    .Select(roww =>
+                       roww.Value is Hashtable details && details[column] != null
+                       ? Convert.ToDecimal(details[column])
+                       : (decimal?)null
+                    )
+                    .FirstOrDefault();
+
+            return rate ?? 0;
+        }
+        
+        public async Task<decimal?> GetHDCRiderPremium4(string policyperiod, int? insuredagefour, decimal? hdcSI, string familysize, Dictionary<string, Hashtable> hdcRatesTable)
         {
 
+            var column = GetColumnNameForPolicyPeriod(policyperiod);
+            var rate = hdcRatesTable
+                   .Where(roww =>
+                      roww.Value is Hashtable rateDetails &&
+                      rateDetails["age"] != null && (rateDetails["age"] as int? ?? 0) == insuredagefour &&
+                      rateDetails["suminsured"] != null && (rateDetails["suminsured"] as decimal? ?? 0) == hdcSI &&
+                      rateDetails["plan"] != null && rateDetails["plan"].ToString() == familysize
+                   )
+                   .Select(roww =>
+                      roww.Value is Hashtable details && details[column] != null
+                      ? Convert.ToDecimal(details[column])
+                      : (decimal?)null
+                   )
+                   .FirstOrDefault();
+
+            return rate ?? 0;
+
+        }
+        
+        public async Task<decimal?> GetHDCRiderPremium5(string policyperiod, int? insuredagefive, decimal? hdcSI, string familysize, Dictionary<string, Hashtable> hdcRatesTable)
+        {
 
             var column = GetColumnNameForPolicyPeriod(policyperiod);
-            var sql = $@"
-                SELECT {column}
-                FROM easyhealth_hdcrates
-                WHERE age = @p0
-                AND suminsured = @p1
-                AND plan = @p2";
-
-            var rate = await dbContext.easyhealth_hdcrates
-                    .FromSqlRaw(sql, insuredageone, hdcSI, familysize)
-                    .Select(r => EF.Property<decimal?>(r, column))
-                .FirstOrDefaultAsync();
+            var rate = hdcRatesTable
+                   .Where(roww =>
+                      roww.Value is Hashtable rateDetails &&
+                      rateDetails["age"] != null && (rateDetails["age"] as int? ?? 0) == insuredagefive &&
+                      rateDetails["suminsured"] != null && (rateDetails["suminsured"] as decimal? ?? 0) == hdcSI &&
+                      rateDetails["plan"] != null && rateDetails["plan"].ToString() == familysize
+                   )
+                   .Select(roww =>
+                      roww.Value is Hashtable details && details[column] != null
+                      ? Convert.ToDecimal(details[column])
+                      : (decimal?)null
+                   )
+                   .FirstOrDefault();
 
 
             return rate ?? 0;
 
         }
         
-        public async Task<decimal?> GetHDCRiderPremium2(string policyperiod, int? insuredagetwo, decimal? hdcSI, string familysize, HDFCDbContext dbContext)
+        public async Task<decimal?> GetHDCRiderPremium6(string policyperiod, int? insuredagesix, decimal? hdcSI, string familysize, Dictionary<string, Hashtable> hdcRatesTable)
         {
-            var column = GetColumnNameForPolicyPeriod(policyperiod);
-            var sql = $@"
-                SELECT {column}
-                FROM easyhealth_hdcrates
-                WHERE age = @p0
-                AND suminsured = @p1
-                AND plan = @p2";
 
-            var rate = await dbContext.easyhealth_hdcrates
-                    .FromSqlRaw(sql, insuredagetwo, hdcSI, familysize)
-                    .Select(r => EF.Property<decimal?>(r, column))
-                .FirstOrDefaultAsync();
+            var column = GetColumnNameForPolicyPeriod(policyperiod);
+            var rate = hdcRatesTable
+                   .Where(roww =>
+                      roww.Value is Hashtable rateDetails &&
+                      rateDetails["age"] != null && (rateDetails["age"] as int? ?? 0) == insuredagesix &&
+                      rateDetails["suminsured"] != null && (rateDetails["suminsured"] as decimal? ?? 0) == hdcSI &&
+                      rateDetails["plan"] != null && rateDetails["plan"].ToString() == familysize
+                   )
+                   .Select(roww =>
+                      roww.Value is Hashtable details && details[column] != null
+                      ? Convert.ToDecimal(details[column])
+                      : (decimal?)null
+                   )
+                   .FirstOrDefault();
 
             return rate ?? 0;
 
         }
         
-        public async Task<decimal?> GetHDCRiderPremium3(string policyperiod, int? insuredagethree, decimal? hdcSI, string familysize, HDFCDbContext dbContext)
+        public async Task<decimal?> GetHDCRiderPremium(string policyperiod, int? eldestMember, decimal? hdcSI, string familysize, Dictionary<string, Hashtable> hdcRatesTable)
         {
             var column = GetColumnNameForPolicyPeriod(policyperiod);
-            var sql = $@"
-                SELECT {column}
-                FROM easyhealth_hdcrates
-                WHERE age = @p0
-                AND suminsured = @p1
-                AND plan = @p2";
-
-            var rate = await dbContext.easyhealth_hdcrates
-                    .FromSqlRaw(sql, insuredagethree, hdcSI, familysize)
-                    .Select(r => EF.Property<decimal?>(r, column))
-                .FirstOrDefaultAsync();
-
-            return rate ?? 0;
-        }
-        
-        public async Task<decimal?> GetHDCRiderPremium4(string policyperiod, int? insuredagefour, decimal? hdcSI, string familysize, HDFCDbContext dbContext)
-        {
-
-            var column = GetColumnNameForPolicyPeriod(policyperiod);
-            var sql = $@"
-                SELECT {column}
-                FROM easyhealth_hdcrates
-                WHERE age = @p0
-                AND suminsured = @p1
-                AND plan = @p2";
-
-            var rate = await dbContext.easyhealth_hdcrates
-                    .FromSqlRaw(sql, insuredagefour, hdcSI, familysize)
-                    .Select(r => EF.Property<decimal?>(r, column))
-                .FirstOrDefaultAsync();
-
-
-            return rate ?? 0;
-
-        }
-        
-        public async Task<decimal?> GetHDCRiderPremium5(string policyperiod, int? insuredagefive, decimal? hdcSI, string familysize, HDFCDbContext dbContext)
-        {
-
-            var column = GetColumnNameForPolicyPeriod(policyperiod);
-            var sql = $@"
-                SELECT {column}
-                FROM easyhealth_hdcrates
-                WHERE age = @p0
-                AND suminsured = @p1
-                AND plan = @p2";
-
-            var rate = await dbContext.easyhealth_hdcrates
-                    .FromSqlRaw(sql, insuredagefive, hdcSI, familysize)
-                    .Select(r => EF.Property<decimal?>(r, column))
-                .FirstOrDefaultAsync();
-
-
-            return rate ?? 0;
-
-        }
-        
-        public async Task<decimal?> GetHDCRiderPremium6(string policyperiod, int? insuredagesix, decimal? hdcSI, string familysize, HDFCDbContext dbContext)
-        {
-
-            var column = GetColumnNameForPolicyPeriod(policyperiod);
-            var sql = $@"
-                SELECT {column}
-                FROM easyhealth_hdcrates
-                WHERE age = @p0
-                AND suminsured = @p1
-                AND plan = @p2";
-
-            var rate = await dbContext.easyhealth_hdcrates
-                    .FromSqlRaw(sql, insuredagesix, hdcSI, familysize)
-                    .Select(r => EF.Property<decimal?>(r, column))
-                .FirstOrDefaultAsync();
-
-
-            return rate ?? 0;
-
-        }
-        
-        public async Task<decimal?> GetHDCRiderPremium(string policyperiod, int? eldestMember, decimal? hdcSI, string familysize, HDFCDbContext dbContext)
-        {
-            var column = GetColumnNameForPolicyPeriod(policyperiod);
-            var sql = $@"
-                SELECT {column}
-                FROM easyhealth_hdcrates
-                WHERE age = @p0
-                AND suminsured = @p1
-                AND plan = @p2";
-
-            var rate = await dbContext.easyhealth_hdcrates
-                    .FromSqlRaw(sql, eldestMember, hdcSI, familysize)
-                    .Select(r => EF.Property<decimal?>(r, column))
-                .FirstOrDefaultAsync();
+            var rate = hdcRatesTable
+                  .Where(roww =>
+                     roww.Value is Hashtable rateDetails &&
+                     rateDetails["age"] != null && (rateDetails["age"] as int? ?? 0) == eldestMember &&
+                     rateDetails["suminsured"] != null && (rateDetails["suminsured"] as decimal? ?? 0) == hdcSI &&
+                     rateDetails["plan"] != null && rateDetails["plan"].ToString() == familysize
+                  )
+                  .Select(roww =>
+                     roww.Value is Hashtable details && details[column] != null
+                     ? Convert.ToDecimal(details[column])
+                     : (decimal?)null
+                  )
+                  .FirstOrDefault();
 
             return rate ?? 0;
 
@@ -1701,7 +1725,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         
         static decimal? GetIndividualPersonalARSI(string? individualpersonalARopt, List<decimal?> sumInsuredList)
         {
-            if (individualpersonalARopt == null || sumInsuredList[1] == null) return 0;
+            if (individualpersonalARopt == "N" || sumInsuredList[0] == null) return 0;
 
             var isApplicable = individualpersonalARopt.Equals("Y", StringComparison.OrdinalIgnoreCase);
 
@@ -1711,7 +1735,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
         
         static decimal? GetIndividualPersonalARAmt(string? individualpersonalARopt, decimal? individualpersonalARSI, DateTime? policy_start_date, DateTime? policy_end_date)
         {
-            if (individualpersonalARopt == null || individualpersonalARSI == null || policy_start_date == null || policy_end_date == null) return 0;
+            if (individualpersonalARopt == "N" || individualpersonalARSI == 0 || policy_start_date == null || policy_end_date == null) return 0;
 
             var dailyRate = individualpersonalARopt.Equals("Y", StringComparison.OrdinalIgnoreCase) ? individualpersonalARSI.Value * 0.99m / 1000 : 0;
 
@@ -1905,8 +1929,8 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 {
                     { "si", rate.si },
                     { "age", rate.age },
-                    { "zone", rate.tier },
-                    { "zone", rate.variant },
+                    { "tier", rate.tier },
+                    { "variant", rate.variant },
                     { "one_year", rate.one_year },
                     { "two_years", rate.two_years }
                 };
@@ -1930,9 +1954,9 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                     { "age", rate.age },
                     { "suminsured", rate.suminsured },
                     { "plan", rate.plan },
-                    { "one_year", rate.age_band },
-                    { "two_years", rate.one_year },
-                    { "three_years", rate.two_years }
+                    { "age_band", rate.age_band },
+                    { "one_year", rate.one_year },
+                    { "two_years", rate.two_years }
 
                 };
 
@@ -1985,6 +2009,32 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 ratesTable[compositeKey] = rateDetails;
             }
             return ratesTable;
+        }
+        public List<List<string>> FetchNewBatchIds(NpgsqlConnection postgresConnection)
+        {
+            string status = ConfigurationManager.AppSettings["Status"];
+            var sqlSource = $"SELECT ir.certificate_no, ir.product_code FROM ins.idst_renewal_data_rgs ir INNER JOIN ins.rne_healthtab ht" +
+                $" ON ir.certificate_no = ht.policy_number WHERE ir.rn_generation_status = @Status AND ht.prod_code in (2806)";
+            var sourceResults = postgresConnection.Query(sqlSource, new { Status = status });
+            var sourceBatchIds = new List<List<string>>();
+            foreach (var result in sourceResults)
+            {
+                var batchInfo = new List<string> { result.certificate_no, result.product_code.ToString() };
+                sourceBatchIds.Add(batchInfo);
+            }
+            return sourceBatchIds;
+        }
+
+        public class IdstData
+        {
+            public string certificate_no { get; set; }
+            public decimal? loading_per_insured1 { get; set; }
+            public decimal? loading_per_insured2 { get; set; }
+            public decimal? loading_per_insured3 { get; set; }
+            public decimal? loading_per_insured4 { get; set; }
+            public decimal? loading_per_insured5 { get; set; }
+            public decimal? loading_per_insured6 { get; set; }
+
         }
     }
 }

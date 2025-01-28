@@ -36,16 +36,7 @@ Log.Logger = new LoggerConfiguration().MinimumLevel.Information()
         logEvent.Level == Serilog.Events.LogEventLevel.Information &&
         logEvent.MessageTemplate.Text.Contains("Executed DbCommand")  // Exclude logs that contain 'Executed DbCommand'
     )
-    // Exclude EF Core related warnings
-    //.Filter.ByExcluding(logEvent =>
-    //    logEvent.MessageTemplate.Text.Contains("RowLimitingOperationWithoutOrderByWarning") ||
-    //    logEvent.MessageTemplate.Text.Contains("The query uses the 'First'/'FirstOrDefault' operator without 'OrderBy' and filter operators")
-    //)
-    // Optionally exclude all EF Core logs
-    //.Filter.ByExcluding(logEvent =>
-    //    logEvent.Properties.ContainsKey("SourceContext") &&
-    //    logEvent.Properties["SourceContext"].ToString().Contains("Microsoft.EntityFrameworkCore")
-    //)
+  
     .CreateLogger();
 string? connectionString = ConfigurationManager.ConnectionStrings["PostgresDb"]?.ConnectionString;
 if (string.IsNullOrEmpty(connectionString))
@@ -58,7 +49,6 @@ builder.ConfigureServices((context, services) =>
     services.AddLogging(configure => configure.AddSerilog());
     services.AddDbContext<HDFCDbContext>(options =>
         options.UseNpgsql(connectionString));
-    services.AddTransient<NewBatchId>();
     services.AddTransient<EasyHealth>();
     services.AddHostedService<MyWorker>();
 });
@@ -68,27 +58,20 @@ builder.ConfigureServices((context, services) =>
     services.AddLogging(configure => configure.AddConsole());
     services.AddHostedService<MyWorker>();
     services.AddTransient<Program>();
-    services.AddSingleton<NewBatchId>();
     services.AddSingleton<EasyHealth>();
 });
 Console.WriteLine("Schedular is Started!");
 Console.WriteLine("Premium Validation Schedular Started!");
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-var serviceProvider = new ServiceCollection().AddLogging(logging => logging.AddSerilog())
-    .AddDbContext<HDFCDbContext>(options =>
-        options.UseNpgsql(connectionString))
-    .AddTransient<NewBatchId>()
-    .BuildServiceProvider();
 
-var serviceProviderEH = new ServiceCollection().AddLogging(logging => logging.AddSerilog())
+var serviceProvider = new ServiceCollection().AddLogging(logging => logging.AddSerilog())
     .AddDbContext<HDFCDbContext>(options =>
         options.UseNpgsql(connectionString))
     .AddTransient<EasyHealth>()
       .BuildServiceProvider();
 
 //var dbContextFactory = host.Services.GetRequiredService<IDbContextFactory<HDFCDbContext>>();
-var fetchbatchid = serviceProvider.GetService<NewBatchId>();
-var easyHealth = serviceProviderEH.GetService<EasyHealth>();
+var easyHealth = serviceProvider.GetService<EasyHealth>();
 string postgresConnectionString = ConfigurationManager.ConnectionStrings["PostgresDb"].ConnectionString;
 using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
 {
@@ -100,15 +83,15 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
         try
         {
             List<string> idPlaceholders = new List<string>();
-            var listofpolicies = fetchbatchid.FetchNewBatchIds(postgresConnection);
+            var listofpolicies = easyHealth.FetchNewBatchIds(postgresConnection);
             Console.WriteLine(listofpolicies.Count);
 
             if (listofpolicies.Count > 0)
             {
                 foreach (var item in listofpolicies)
                 {
-                    var tasks = Enumerable.Range(0, 10).Select(async i =>
-                    {
+                    //var tasks = Enumerable.Range(0, 10).Select(async i =>
+                    //{
                         using (var scope = host.Services.CreateScope())
                         {
                             var dbContext = scope.ServiceProvider.GetRequiredService<HDFCDbContext>();
@@ -118,6 +101,7 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
                             var carates = await easyHealth.GetCARatesAsync(dbContext);//easyhealth_carates
 
                             string certificateNo = item[0];  // First item is certificate_no
+
                             string productCode = item[1];
                             // Resolve a new instance of DbContext for each task
                             var ehRNEData = await easyHealth.GetGCEasyHealthDataAsync(certificateNo, dbContext);
@@ -131,9 +115,9 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
                             }
 
                         }
-                    }).ToList();
+                    //}).ToList();
 
-                    await System.Threading.Tasks.Task.WhenAll(tasks);
+                    //await System.Threading.Tasks.Task.WhenAll(tasks);
 
                 }
                 Console.Write("Upsell calculation started");
