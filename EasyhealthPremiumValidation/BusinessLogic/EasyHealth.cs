@@ -32,13 +32,11 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
             _logger = logger;
            
         }
-
-
-        public async Task GetEasyHealthValidation(IEnumerable<EasyHealthRNE> ehRNEData, string policyNo, Dictionary<string, Hashtable> baseRateHashTable, Dictionary<string, Hashtable> hdcRatesTable, Dictionary<string, Hashtable> caRatesTable, Dictionary<string, Hashtable> ciRatesTable)
-        {          
-           await CalculateEasyHealthPremium(ehRNEData,policyNo, baseRateHashTable, hdcRatesTable, caRatesTable, ciRatesTable);
-
+        public async Task<IEnumerable<EasyHealthRNE>> GetEasyHealthValidation(IEnumerable<EasyHealthRNE> ehRNEData, string policyNo, Dictionary<string, Hashtable> baseRateHashTable, Dictionary<string, Hashtable> hdcRatesTable, Dictionary<string, Hashtable> caRatesTable, Dictionary<string, Hashtable> ciRatesTable)
+        {
+             return await CalculateEasyHealthPremium(ehRNEData, policyNo, baseRateHashTable, hdcRatesTable, caRatesTable, ciRatesTable);
         }
+            
         async Task HandlePremiumCrosschecksAndUpdateStatus(string policyNo, EasyHealthRNE osRNEData, decimal? crosscheck, decimal? netPremium, decimal? finalPremium, decimal? gst)
         {
             string? connectionString = ConfigurationManager.ConnectionStrings["PostgresDb"].ConnectionString;
@@ -489,7 +487,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
             return data;
         }
 
-        private async Task CalculateEasyHealthPremium(IEnumerable<EasyHealthRNE> ehRNEData,string policyNo, Dictionary<string, Hashtable> baseRateHashTable, Dictionary<string, Hashtable> hdcRatesTable, Dictionary<string, Hashtable> caRatesTable, Dictionary<string, Hashtable> ciRatesTable)
+        private async Task<IEnumerable<EasyHealthRNE>> CalculateEasyHealthPremium(IEnumerable<EasyHealthRNE> ehRNEData,string policyNo, Dictionary<string, Hashtable> baseRateHashTable, Dictionary<string, Hashtable> hdcRatesTable, Dictionary<string, Hashtable> caRatesTable, Dictionary<string, Hashtable> ciRatesTable)
         {
             EasyHealthRNE eh = null;
             var columnNames = new List<string>();
@@ -1007,12 +1005,176 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 decimal? netPremium = ((easyHealthORasePremium + criticalIllnessRiderPremium + hdcFinalPremium + prpremiumProtectorRiderPremium + individualPersonalAccidentRiderPremium + criticalAdvRiderPremium))??0;
                 decimal? GST = (netPremium * 0.18m) ?? 0 ;
                 decimal? finalPremium = (netPremium + GST) ?? 0;
-                decimal? Crosscheck = (row.num_tot_premium - finalPremium) ?? 0;              
+                decimal? Crosscheck = (row.num_tot_premium - finalPremium) ?? 0;
+                eh = new EasyHealthRNE
+                {
+                    prod_code = row.prod_code,
+                    prod_name = row.prod_name,
+                    policy_number = row.policy_number,
+                    txt_email = row.txt_email,
+                    txt_family = row.txt_family,
+                    reference_num = row.reference_num,
+                    no_of_members = noOfMembers,
+                    insured_cb1 = row.insured_cb1,
+                    insured_cb2 = row.insured_cb2,
+                    insured_cb3 = row.insured_cb3,
+                    insured_cb4 = row.insured_cb4,
+                    insured_cb5 = row.insured_cb5,
+                    insured_cb6 = row.insured_cb6,
+                    sum_insured1 = row.sum_insured1,
+                    sum_insured2 = row.sum_insured2,
+                    sum_insured3 = row.sum_insured3,
+                    sum_insured4 = row.sum_insured4,
+                    sum_insured5 = row.sum_insured5,
+                    sum_insured6 = row.sum_insured6,
+                    insured_loadingper1 = row.insured_loadingper1,
+                    insured_loadingper2 = row.insured_loadingper2,
+                    insured_loadingper3 = row.insured_loadingper3,
+                    insured_loadingper4 = row.insured_loadingper4,
+                    insured_loadingper5 = row.insured_loadingper5,
+                    insured_loadingper6 = row.insured_loadingper6,
+                    insured_loadingamt1 = row.insured_loadingamt1,
+                    insured_loadingamt2 = row.insured_loadingamt2,
+                    insured_loadingamt3 = row.insured_loadingamt3,
+                    insured_loadingamt4 = row.insured_loadingamt4,
+                    insured_loadingamt5 = row.insured_loadingamt5,
+                    insured_loadingamt6 = row.insured_loadingamt6,
+                    txt_insuredname1 = row.txt_insuredname1,
+                    txt_insuredname2 = row.txt_insuredname2,
+                    txt_insuredname3 = row.txt_insuredname3,
+                    txt_insuredname4 = row.txt_insuredname4,
+                    txt_insuredname5 = row.txt_insuredname5,
+                    txt_insuredname6 = row.txt_insuredname6,
+                    txt_insured_dob1 = row.txt_insured_dob1,
+                    txt_insured_dob2 = row.txt_insured_dob2,
+                    txt_insured_dob3 = row.txt_insured_dob3,
+                    txt_insured_dob4 = row.txt_insured_dob4,
+                    txt_insured_dob5 = row.txt_insured_dob5,
+                    txt_insured_dob6 = row.txt_insured_dob6,
+                    txt_insured_age1 = row.txt_insured_age1,
+                    txt_insured_age2 = row.txt_insured_age2,
+                    txt_insured_age3 = row.txt_insured_age3,
+                    txt_insured_age4 = row.txt_insured_age4,
+                    txt_insured_age5 = row.txt_insured_age5,
+                    txt_insured_age6 = row.txt_insured_age6,
+                    txt_insured_relation1 = row.txt_insured_relation1,//coming as "string"
+                    txt_insured_relation2 = row.txt_insured_relation2,
+                    txt_insured_relation3 = row.txt_insured_relation3,
+                    txt_insured_relation4 = row.txt_insured_relation4,
+                    txt_insured_relation5 = row.txt_insured_relation5,
+                    txt_insured_relation6 = row.txt_insured_relation6,
+                    coverbaseloadingrate1 = row.coverbaseloadingrate1,//Basic Loading Rate1 in gc
+                    coverbaseloadingrate2 = row.coverbaseloadingrate2,
+                    coverbaseloadingrate3 = row.coverbaseloadingrate3,
+                    coverbaseloadingrate4 = row.coverbaseloadingrate4,
+                    coverbaseloadingrate5 = row.coverbaseloadingrate5,
+                    coverbaseloadingrate6 = row.coverbaseloadingrate6,
+                    policy_start_date = row.policy_start_date,
+                    policy_expiry_date = row.policy_expiry_date,
+                    policy_type = row.policy_type,
+                    policy_period = row.policy_period,
+                    policyplan = row.policyplan,
+                    tier_type = row.tier_type,
+                    loyalty_discount = loyaltyDiscountValue,
+                    employee_discount = employeeDiscountValue,
+                    online_discount = (onlineDiscountValue * 100),
+                    family_discount = (familyDiscountValue * 100),
+                    longterm_discount = (longTermDiscount * 100),
+                    family_discount_PRHDC = familyDiscountPRHDC,
+                    base_Premium = basePremium,
+                    basePremLoading_Insured1 = basePremLoadingInsured1,
+                    basePremLoading_Insured2 = basePremLoadingInsured2,
+                    basePremLoading_Insured3 = basePremLoadingInsured3,
+                    basePremLoading_Insured4 = basePremLoadingInsured4,
+                    basePremLoading_Insured5 = basePremLoadingInsured5,
+                    basePremLoading_Insured6 = basePremLoadingInsured6,
+                    basePrem_Loading = basePremLoading,
+                    easyHealth_BaseAndLoading_Premium = easyHealthBaseAndLoadingPremium,
+                    easyHealth_Loyalty_Discount = easyHealthLoyaltyDiscount,
+                    easyHealth_Employee_Discount = easyHealthEmployeeDiscount,
+                    easyHealth_Online_Discount = easyHealthOnlineDiscount,
+                    easyHealth_Family_Discount = easyHealthFamilyDiscount,
+                    easyHealth_LongTerm_Discount = easyHealthLongTermDiscount,
+                    easyHealth_ORase_Premium = easyHealthORasePremium.HasValue ? Math.Round(easyHealthORasePremium.Value, 2) : (decimal?)null,
+                    hdc_opt = Opt,
+                    hdc_si = hdcSI,
+                    hdc_rider_premium = hdcRiderPremium,
+                    hdc_family_discount = hdcFamilyDiscount,
+                    hdc_longterm_discount = hdcLongTermDiscount,
+                    hdc_final_premium = hdcFinalPremium,
+                    hdc_Rider_Premium1 = hdcRiderPremium1,
+                    hdc_Rider_Premium2 = hdcRiderPremium2,
+                    hdc_Rider_Premium3 = hdcRiderPremium3,
+                    hdc_Rider_Premium4 = hdcRiderPremium4,
+                    hdc_Rider_Premium5 = hdcRiderPremium5,
+                    hdc_Rider_Premium6 = hdcRiderPremium6,
+                    cI_rider_Opt = criticalIllnessRideropt,
+                    cI_si_1 = ci_si_1,
+                    cI_si_2 = ci_si_2,
+                    cI_si_3 = ci_si_3,
+                    cI_si_4 = ci_si_4,
+                    cI_si_5 = ci_si_5,
+                    cI_si_6 = ci_si_6,
+                    criticalIllness_Rider_FamilyDiscount = criticalIllnessRiderFamilyDiscount,
+                    criticalIllness_Rider_LongTermDiscount = criticalIllnessRiderLongTermDiscount,
+                    criticalIllness_Rider_Premium = criticalIllnessRiderPremium,
+                    pr_opt = propt,
+                    pr_insured_1 = prInsured1,
+                    pr_insured_2 = prInsured2,
+                    pr_insured_3 = prInsured3,
+                    pr_insured_4 = prInsured4,
+                    pr_insured_5 = prInsured5,
+                    pr_insured_6 = prInsured6,
+                    pr_ProtectorRider_Premium = prProtectorRiderPremium,
+                    pr_loading_insured1 = prLoadingInsured1,
+                    pr_loading_insured2 = prLoadingInsured2,
+                    pr_loading_insured3 = prLoadingInsured3,
+                    pr_loading_insured4 = prLoadingInsured4,
+                    pr_loading_insured5 = prLoadingInsured5,
+                    pr_loading_insured6 = prLoadingInsured6,
+                    pr_protectorriderloading_premium = ProtectorRiderLoadingPremium,
+                    pr_BaseLoading_Premium = prBaseLoadingPremium,
+                    pr_Family_Discount = prFamilyDiscount,
+                    pr_LongTerm_Discount = prLongTermDiscount,
+                    prpremium_Protector_Rider_Premium = prpremiumProtectorRiderPremium,
+                    individual_personalAR_opt = individualpersonalARopt,
+                    individual_personalAR_SI = individualpersonalARSI,
+                    individual_personalAR_Amt = individualpersonalARAmt,
+                    individual_personalAR_LongTermDiscount = individualpersonalARLongTermDiscount,
+                    individual_Personal_AccidentRiderPremium = individualPersonalAccidentRiderPremium,
+                    criticalAdvantage_Rider_opt = criticalAdvantageRideropt,
+                    criticalAdvantageRider_SumInsured_1 = ca_si_1,
+                    criticalAdvantageRider_SumInsured_2 = ca_si_2,
+                    criticalAdvantageRider_SumInsured_3 = ca_si_3,
+                    criticalAdvantageRider_SumInsured_4 = ca_si_4,
+                    criticalAdvantageRider_SumInsured_5 = ca_si_5,
+                    criticalAdvantageRider_SumInsured_6 = ca_si_6,
+                    criticalAdvrider_loadinginsured1 = criticalAdvantageRiderLoadingInsured1,
+                    criticalAdvrider_loadinginsured2 = criticalAdvantageRiderLoadingInsured2,
+                    criticalAdvrider_loadinginsured3 = criticalAdvantageRiderLoadingInsured3,
+                    criticalAdvrider_loadinginsured4 = criticalAdvantageRiderLoadingInsured4,
+                    criticalAdvrider_loadinginsured5 = criticalAdvantageRiderLoadingInsured5,
+                    criticalAdvrider_loadinginsured6 = criticalAdvantageRiderLoadingInsured6,
+                    criticalAdvriderloading = criticalAdvantageRiderLoading,
+                    criticalAdvriderbase_loading_premium = criticalAdvRiderBaseLoadingPremium,
+                    criticalAdvRiderPremium_LongTerm_Discount = criticalAdvRiderPremiumLongTermDiscount,
+                    criticalAdv_Rider_Premium = criticalAdvRiderPremium,
+                    final_Premium_upsell = finalPremium.HasValue ? Math.Round(finalPremium.Value, 2) : (decimal?)0,
+                    net_premium = netPremium.HasValue ? Math.Round(netPremium.Value, 2) : (decimal?)0,
+                    final_Premium = finalPremium.HasValue ? Math.Round(finalPremium.Value, 2) : (decimal?)0,
+                    gst = GST.HasValue ? Math.Round(GST.Value, 2) : (decimal?)0,
 
+                    easyhealth_total_Premium = row.num_tot_premium.HasValue ? Math.Round(row.num_tot_premium.Value, 2) : (decimal?)0,
+                    easyhealth_netpremium = row.num_net_premium.HasValue ? Math.Round(row.num_net_premium.Value, 2) : (decimal?)0,
+                    easy_health_gst = row.num_service_tax.HasValue ? Math.Round(row.num_service_tax.Value, 2) : (decimal?)0,
+                    cross_Check = Crosscheck 
+
+                };
                 try
                 {
                     await HandlePremiumCrosschecksAndUpdateStatus(policyNo, row, Crosscheck, netPremium, finalPremium, GST);
                 }
+
                 catch (DbUpdateConcurrencyException ex)
                 {
                     var entry = ex.Entries.Single();
@@ -1024,6 +1186,7 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 }
                
             }
+            return new List<EasyHealthRNE> { eh };
 
         }
 

@@ -18,10 +18,7 @@ namespace HERGPremiumValidationSchedular.Data
     public class HDFCDbContext : DbContext
     {
         private readonly IConfiguration _configuration;
-        //public HDFCDbContext(DbContextOptions options) : base(options)
-        //{
-
-        //}
+       
         public HDFCDbContext(DbContextOptions<HDFCDbContext> options) : base(options)
         {
         }
@@ -29,10 +26,7 @@ namespace HERGPremiumValidationSchedular.Data
         {
             _configuration = configuration;
         }
-        //public HDFCDbContext(IConfiguration configuration)
-        //{
-        //    _configuration = configuration;
-        //}
+       
         public DbSet<AuditTrail> audittrail { get; set; }
         public DbSet<relations> relations { get; set; }
         public DbSet<hdcrates> hdcrates { get; set; }
