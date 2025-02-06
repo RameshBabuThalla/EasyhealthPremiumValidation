@@ -315,20 +315,26 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
                                                 {
                                                     Console.WriteLine("Policy number not found.");
                                                 }
-                                                using (IDbConnection dbConnection = new NpgsqlConnection(connectionString))
-                                                {
-                                                    dbConnection.Open();
+                                        using (var connection = new NpgsqlConnection(connectionString))
+                                        {
+                                            connection.Open();
                                                     if (objEasyhealthPremiumValidation != null)
                                                     {
                                                         var no_of_members = easyhealthRNEData.FirstOrDefault()?.no_of_members;
-                                                        var ridercount = 5;
-                                                        var policy_number = objEasyhealthPremiumValidation.policy_number;
+                                                        var ridercount = easyhealthRNEData.FirstOrDefault()?.riderCount;
+                                                var policy_number = objEasyhealthPremiumValidation.policy_number;
                                                         var reference_number = objEasyhealthPremiumValidation.reference_num;
                                                         var newRecord = new List<rne_calculated_cover_rg>();
-                                                        for (int i = 1; i <= no_of_members; i++)
-                                                        {
-                                                            var sumInsured = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"sum_insured{i}")?.GetValue(objEasyhealthPremiumValidation));
-                                                            var basePremium = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"base_Premium{i}")?.GetValue(objEasyhealthPremiumValidation));
+                                                
+                                                var easyhealthRNEItem = easyhealthRNEData.ElementAtOrDefault(0);
+                                                var riderPremium = 0.0m;
+                                                for (int i = 0; i <= no_of_members-1; i++)
+                                                {
+                                                    
+                                                    //var basePremium = Convert.ToDecimal(easyhealthRNEData.GetType().GetProperty(propertyName)?.GetValue(easyhealthRNEData));
+                                                    var basePremium = easyhealthRNEItem.basesumInsuredList[i];
+                                                    var sumInsured = easyhealthRNEItem.sumInsuredList[i];//Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"sum_insured{i}")?.GetValue(objEasyhealthPremiumValidation));
+                                                                    //var basePremium = Convert.ToDecimal(easyhealthRNEData.GetType().GetProperty($"basesumInsuredList{i}")?.GetValue(easyhealthRNEData));
                                                             //var sumInsuredupsell = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"upsell_sum_insured{i}")?.GetValue(objEasyhealthPremiumValidation));
                                                             //var basePremiumupsell = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"base_upsell_Premium{i}")?.GetValue(objEasyhealthPremiumValidation));
                                                             //var finalPremiumupsell = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"final_Premium_upsell")?.GetValue(objEasyhealthPremiumValidation));
@@ -337,15 +343,15 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
                                                                 basePremium *= 0.45m;
                                                                 //basePremiumupsell *= 0.45m;
                                                             }
-                                                            var newRecord1 = new rne_calculated_cover_rg
-                                                            {
-                                                                policy_number = policy_number,
-                                                                referencenum = reference_number,
-                                                                suminsured = sumInsured,
-                                                                premium = basePremium,
-                                                                riskname = objEasyhealthPremiumValidation.GetType().GetProperty($"txt_insuredname{i}")?.GetValue(objEasyhealthPremiumValidation)?.ToString(),
+                                                    var newRecord1 = new rne_calculated_cover_rg
+                                                    {
+                                                        policy_number = certificateNo,
+                                                        referencenum = reference_number,
+                                                        suminsured = sumInsured,
+                                                        premium = basePremium,
+                                                        riskname = objEasyhealthPremiumValidation.GetType().GetProperty($"txt_insuredname{i}")?.GetValue(objEasyhealthPremiumValidation)?.ToString(),
                                                                 covername = "Easyhealth Basic Cover"
-                                                            };
+                                                    };
                                                             //var newRecord2 = new rne_calculated_cover_rg
                                                             //{
                                                             //    isupsell = 1,
@@ -361,23 +367,26 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
                                                             //newRecord.Add(newRecord2);
                                                         }
 
-                                                        for (int j = 1; j <= ridercount; j++)
+                                                        for (int j = 0; j <= ridercount-1; j++)
                                                         {
-                                                            var riderPremium = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"criticalAdvantageRiderInsuredList{j}")?.GetValue(objEasyhealthPremiumValidation));
-                                                            var riderPremiumpr = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"pr_insured_{j}")?.GetValue(objEasyhealthPremiumValidation));
-                                                            var riderPremiumipa = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"individual_Personal_AccidentRiderPremium")?.GetValue(objEasyhealthPremiumValidation));
+                                                    if (j < easyhealthRNEItem.criticalAdvantageList.Count)
+                                                    {
+                                                        riderPremium = easyhealthRNEItem.criticalAdvantageList[j] ?? 0;
+                                                    }
+                                                    var riderPremiumpr = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"pr_insured_{j}")?.GetValue(objEasyhealthPremiumValidation));
+                                                    var riderPremiumipa = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"individual_Personal_AccidentRiderPremium")?.GetValue(objEasyhealthPremiumValidation));
                                                             var riderPremiumhdc = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"hdc_Rider_Premium{j}")?.GetValue(objEasyhealthPremiumValidation));
                                                             var riderPremiumur = Convert.ToDecimal(objEasyhealthPremiumValidation.GetType().GetProperty($"criticalIllness_Rider_Insured{j}")?.GetValue(objEasyhealthPremiumValidation));
                                                             if (riderPremium > 0)
                                                             {
                                                                 var riderRecord = new rne_calculated_cover_rg
                                                                 {
-                                                                    policy_number = policy_number,
+                                                                    policy_number = certificateNo,
                                                                     referencenum = reference_number,
                                                                     riskname = objEasyhealthPremiumValidation.GetType().GetProperty($"txt_insuredname{j}")?.GetValue(objEasyhealthPremiumValidation)?.ToString(),
                                                                     //suminsured = riderSumInsured,
                                                                     premium = riderPremium,
-                                                                    covername = "Critical Advantage Rider"
+                                                                    covername = "Critical Advantage Rider",noofmembers=no_of_members,
                                                                 };
                                                                 newRecord.Add(riderRecord);
                                                             }
@@ -385,7 +394,7 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
                                                             {
                                                                 var riderRecordpr = new rne_calculated_cover_rg
                                                                 {
-                                                                    policy_number = policy_number,
+                                                                    policy_number = certificateNo,
                                                                     referencenum = reference_number,
                                                                     riskname = objEasyhealthPremiumValidation.GetType().GetProperty($"txt_insuredname{j}")?.GetValue(objEasyhealthPremiumValidation)?.ToString(),
                                                                     premium = riderPremiumpr,
@@ -397,7 +406,7 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
                                                             {
                                                                 var riderRecordipa = new rne_calculated_cover_rg
                                                                 {
-                                                                    policy_number = policy_number,
+                                                                    policy_number = certificateNo,
                                                                     referencenum = reference_number,
                                                                     riskname = objEasyhealthPremiumValidation.GetType().GetProperty($"txt_insuredname{j}")?.GetValue(objEasyhealthPremiumValidation)?.ToString(),
                                                                     premium = riderPremiumipa,
@@ -409,11 +418,11 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
                                                             {
                                                                 var riderRecordhdc = new rne_calculated_cover_rg
                                                                 {
-                                                                    policy_number = policy_number,
+                                                                    policy_number = certificateNo,
                                                                     referencenum = reference_number,
                                                                     riskname = objEasyhealthPremiumValidation.GetType().GetProperty($"txt_insuredname{j}")?.GetValue(objEasyhealthPremiumValidation)?.ToString(),
                                                                     premium = riderPremiumhdc,
-                                                                    covername = "Hospital Daily Cash Rider"
+                                                                    covername = "Hospital Daily Cash Rider",noofmembers = no_of_members,
                                                                 };
                                                                 newRecord.Add(riderRecordhdc);
                                                             }
@@ -421,21 +430,24 @@ using (var postgresConnection = new NpgsqlConnection(postgresConnectionString))
                                                             {
                                                                 var riderRecordur = new rne_calculated_cover_rg
                                                                 {
-                                                                    policy_number = policy_number,
+                                                                    policy_number = certificateNo,
                                                                     referencenum = reference_number,
                                                                     riskname = objEasyhealthPremiumValidation.GetType().GetProperty($"txt_insuredname{j}")?.GetValue(objEasyhealthPremiumValidation)?.ToString(),
                                                                     premium = riderPremiumur,
-                                                                    covername = "Critical Illness Rider"
+                                                                    covername = "Critical Illness Rider",
+                                                                    noofmembers = no_of_members,
                                                                 };
                                                                 newRecord.Add(riderRecordur);
                                                             }
                                                         }
-
+                                               
                                                         var insertQuery = @"
-                                    INSERT INTO rne_calculated_cover_rg (policy_number, referencenum, suminsured, premium, totalpremium, riskname, covername, isupsell)
-                                    VALUES (@policy_number, @referencenum, @suminsured, @premium, @totalpremium, @riskname, @covername, @isupsell);
-                                    ";
-                                                        dbConnection.ExecuteAsync(insertQuery, newRecord);
+                                    INSERT INTO ins.rne_calculated_cover_rg (policy_number,riskname,noofmembers, referencenum, suminsured, premium, totalpremium, riskname, covername, isupsell)
+                                    VALUES (@policy_number,@riskname,@noofmembers, @referencenum, @suminsured, @premium, @totalpremium, @riskname, @covername, @isupsell);
+                                    "; 
+                                                        await connection.OpenAsync();
+                                                await connection.ExecuteAsync(insertQuery, newRecord);
+                                                        connection.ExecuteAsync(insertQuery, newRecord);
                                                     }
                                                 }
                                                 break;

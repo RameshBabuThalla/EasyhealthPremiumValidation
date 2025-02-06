@@ -566,6 +566,14 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 siRiderFiveDataTable.Columns.Add("RiderName", typeof(string));
                 siRiderFiveDataTable.Columns.Add("SIValue", typeof(object));
                 siRiderFiveDataTable = GetRiderSI(table, searchRider5);
+                int riderCount = 0;
+
+                riderCount += siRiderOneDataTable.Rows.Count;
+                riderCount += siRiderTwoDataTable.Rows.Count;
+                riderCount += siRiderThreeDataTable.Rows.Count;
+                riderCount += siRiderFourDataTable.Rows.Count;
+                riderCount += siRiderFiveDataTable.Rows.Count;
+
                 string? policyLdDesc1 = row.pollddesc1;
                 string? policyLdDesc2 = row.pollddesc2;
                 string? policyLdDesc3 = row.pollddesc3;
@@ -1007,7 +1015,8 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                 decimal? finalPremium = (netPremium + GST) ?? 0;
                 decimal? Crosscheck = (row.num_tot_premium - finalPremium) ?? 0;
                 eh = new EasyHealthRNE
-                {
+                {   
+                    riderCount=riderCount,
                     prod_code = row.prod_code,
                     prod_name = row.prod_name,
                     policy_number = row.policy_number,
@@ -1082,6 +1091,9 @@ namespace HERGPremiumValidationSchedular.BussinessLogic
                     longterm_discount = (longTermDiscount * 100),
                     family_discount_PRHDC = familyDiscountPRHDC,
                     base_Premium = basePremium,
+                    basesumInsuredList = basePremiumsList,
+                    sumInsuredList=sumInsuredList,
+                    criticalAdvantageList=criticalAdvantageList,
                     basePremLoading_Insured1 = basePremLoadingInsured1,
                     basePremLoading_Insured2 = basePremLoadingInsured2,
                     basePremLoading_Insured3 = basePremLoadingInsured3,
