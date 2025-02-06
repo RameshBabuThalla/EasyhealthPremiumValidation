@@ -24,12 +24,16 @@ namespace HERGPremiumValidationSchedular.Models.Domain
         //public decimal? partnertotpremium { get; set; }
         //public decimal? partner_tax { get; set; }
         public int? prod_code { get; set; }
+        public int riderCount{ get; set; }
         public string? prod_name { get; set; }
         //public string? split_flag { get; set; }
         public long? reference_num { get; set; }
         public TimeSpan? reference_date { get; set; }
         [Key]
         public string policy_number { get; set; }
+        public List<decimal?> basesumInsuredList { get; set; }
+        public List<decimal?> criticalAdvantageList { get; set; }
+        public List<decimal?> sumInsuredList { get; set; }
         //public long? branchcode { get; set; }
         //public string? branchname { get; set; }
         //public string? customer_id { get; set; }
